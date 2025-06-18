@@ -1,0 +1,54 @@
+
+
+// =============== SIDE-BY-SIDE ===============
+
+sbsAtrHour = request.security(syminfo.tickerid, "60", ta.atr(sbsAtrLength))
+
+getSideBySideThreshold() =>
+    if sbsInSizeLimitMode == "percent"
+        sbsPercentThreshold * open[1] / 100
+    else
+        sbsAtrHour * sbsAtrFactor
+
+
+spsBull = false
+spsBear = false
+
+if isNewHour
+    threshold = getSideBySideThreshold()
+    if bodySize(4) > threshold and bodySize(3) > threshold and bodySize(2) > threshold
+        p1 = math.abs(100 - proportionPercent(bodySize(4), bodySize(3)))
+        p2 = math.abs(100 - proportionPercent(bodySize(4), bodySize(2)))
+        p3 = proportionPercent(bodySize(4), bodySize(1))
+        if p1 < sbsTolerance and p2 < sbsTolerance and p3 < 50
+            if isBear(4) and isBull(3) and isBear(2) and isBull(1)
+                spsBull := true
+            if isBull(4) and isBear(3) and isBull(2) and isBear(1)
+                spsBear := true
+                  
+plotshape(
+  spsBull ? low[1] : na,
+  offset=-1,
+  title="Side By Side Bullish",
+  text="SBS-Bull",
+  style=shape.labelup,
+  location=location.absolute,
+  color=color.gray,
+  textcolor=color.white
+  )
+plotshape(
+  spsBear ? high[1] : na,
+  offset=-1,
+  title="Side By Side Bearish",
+  text="SBS-Bear",
+  style=shape.labeldown,
+  location=location.absolute,
+  color=color.gray,
+  textcolor=color.white
+  )
+
+if spsBull
+    alert(syminfo.ticker + " Side By Side Bullish", alert.freq_once_per_bar)
+if spsBear
+    alert(syminfo.ticker + " Side By Side Bearish", alert.freq_once_per_bar)
+

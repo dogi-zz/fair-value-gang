@@ -1,0 +1,24 @@
+
+//IMPORT fvg.settings.pine
+//IMPORT side-by-side.settings.pine
+//IMPORT rsi-div.settings.pine
+
+
+
+// =============== COMMONS ===============
+
+bullBase = input.color(#089981, "Bullish Color", group="Styles")
+bearBase = input.color(#f23645, "Bearish Color", group="Styles")
+
+bullCss        = color.new(bullBase, 70)
+bearCss        = color.new(bearBase, 70)
+bullCssBorder  = color.new(bullBase, 50)
+bearCssBorder  = color.new(bearBase, 50)
+
+bullCssLight   = color.new(bullBase, 95)
+bearCssLight   = color.new(bearBase, 95)
+bullCssBorderLight   = color.new(bullBase, 90)
+bearCssBorderLight   = color.new(bearBase, 90)
+
+textColor = input.color(color.white, "Text Color", group="Styles")
+noneColor = color.new(color.white, 100)

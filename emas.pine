@@ -1,0 +1,8 @@
+
+
+plotEmas = input.bool(true, "Plot EMAs", group="Extras")
+
+plot(plotEmas ? ta.ema(close, 20) : na, title="EMA 20", color=color.orange)
+plot(plotEmas ? ta.ema(close, 50) : na, title="EMA 50", color=color.blue, linewidth = 2)
+plot(plotEmas ? ta.ema(close, 200) : na, title="EMA 200", color=color.gray, linewidth = 3)
+

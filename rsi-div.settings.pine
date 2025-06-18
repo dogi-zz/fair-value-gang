@@ -1,0 +1,11 @@
+
+
+// =============== RSI-DIVERGENCE SETTINGS ===============
+
+rsiLength = input.int(title="RSI Period", minval=1, defval=14, group="RSI - Divergence")
+rsiLookbackR = input.int(title="RSI Pivot Lookback Right", defval=5, display = display.data_window, group="RSI - Divergence")
+rsiLookbackL = input.int(title="RSI Pivot Lookback Left", defval=5, display = display.data_window, group="RSI - Divergence")
+rsiRangeUpper = input.int(title="RSI Max of Lookback Range", defval=60, display = display.data_window, group="RSI - Divergence")
+rsiRangeLower = input.int(title="RSI Min of Lookback Range", defval=5, display = display.data_window, group="RSI - Divergence")
+
+

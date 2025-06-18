@@ -1,0 +1,13 @@
+
+
+
+// =============== SIDE-BY-SIDE SETTINGS ===============
+
+sbsInSizeLimitMode = input.string("percent", "SBS-GrößenLimit", options=["percent", "atr"], group="Side By Side Einstellungen")
+sbsAtrLength = input.int(14, "SBS-ATR Length", group="FVG Einstellungen")
+sbsAtrFactor = input.float(0.5, "SBS-Threshold Factor", minval=0.0, step=0.1, group="Side By Side Einstellungen")
+sbsPercentThreshold = input.float(0.5, "SBS-Percent-Threshold", minval=0.0, step=0.1, group="Side By Side Einstellungen")
+
+sbsTolerance = input.float(10, "SBS-Body Tolerance (%)", minval=0.0, step=0.01, group="Side By Side Einstellungen")
+
+

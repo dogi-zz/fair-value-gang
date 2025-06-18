@@ -1,0 +1,84 @@
+
+// =============== RSI-DIVERGENCE FUNCTIONALITY ===============
+
+
+
+rsiOsc = ta.rsi(close, rsiLength)
+
+rsiPlFound = na(ta.pivotlow(rsiOsc, rsiLookbackL, rsiLookbackR)) ? false : true
+rsiPhFound = na(ta.pivothigh(rsiOsc, rsiLookbackL, rsiLookbackR)) ? false : true
+
+rsiIsInRange(cond) =>
+	bars = ta.barssince(cond == true)
+	rsiRangeLower <= bars and bars <= rsiRangeUpper
+
+//------------------------------------------------------------------------------
+// Regular Bullish
+// Osc: Higher Low
+rsiInRangePl = rsiIsInRange(rsiPlFound[1])
+oscHL = rsiOsc[rsiLookbackR] > ta.valuewhen(rsiPlFound, rsiOsc[rsiLookbackR], 1) and rsiInRangePl
+
+// Price: Lower Low
+rsiPriceLL = low[rsiLookbackR] < ta.valuewhen(rsiPlFound, low[rsiLookbackR], 1)
+rsiBullCondAlert = rsiPriceLL and oscHL and rsiPlFound
+rsiBullCond = rsiOsc < 30 and rsiBullCondAlert
+ 
+plot(
+  rsiPlFound ? low[rsiLookbackR] : na,
+  offset=-rsiLookbackR,
+  title="Regular Bullish",
+  linewidth=2,
+  color=(rsiBullCond ? bullCssBorderLight : noneColor),
+  display = display.pane
+  )
+
+plotshape(
+  rsiBullCond ? low[rsiLookbackR] : na,
+  offset=-rsiLookbackR,
+  title="Regular Bullish Label",
+  text="RSI-Div Bull",
+  style=shape.labelup,
+  location=location.absolute,
+  color=bullCssBorder,
+  textcolor=textColor
+  )
+
+
+//------------------------------------------------------------------------------
+// Regular Bearish
+// Osc: Lower High
+rsiInRangePh = rsiIsInRange(rsiPhFound[1])
+rsiOscLH = rsiOsc[rsiLookbackR] < ta.valuewhen(rsiPhFound, rsiOsc[rsiLookbackR], 1) and rsiInRangePh
+
+// Price: Higher High
+
+rsiPriceHH = high[rsiLookbackR] > ta.valuewhen(rsiPhFound, high[rsiLookbackR], 1)
+
+rsiBearCondAlert = rsiPriceHH and rsiOscLH and rsiPhFound
+rsiBearCond = rsiOsc > 70 and rsiBearCondAlert
+
+plot(
+  rsiPhFound ? high[rsiLookbackR] : na,
+  offset=-rsiLookbackR,
+  title="Regular Bearish",
+  linewidth=2,
+  color=(rsiBearCond ? bearCssBorderLight : noneColor),
+  display = display.pane
+  )
+
+plotshape(
+  rsiBearCond ? high[rsiLookbackR] : na,
+  offset=-rsiLookbackR,
+  title="Regular Bearish Label",
+  text="RSI-Div Bear",
+  style=shape.labeldown,
+  location=location.absolute,
+  color=bearCssBorder,
+  textcolor=textColor
+  )
+
+if isNewHour
+    if rsiBullCondAlert
+        alert(syminfo.ticker + " RSI-Divergence Bullish", alert.freq_once_per_bar)
+    if rsiBearCondAlert
+        alert(syminfo.ticker + " RSI-Divergence Bearish", alert.freq_once_per_bar)

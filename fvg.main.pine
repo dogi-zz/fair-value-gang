@@ -1,0 +1,113 @@
+  
+//-----------------------------------------------------------------------------
+// FVG - detection/display
+//-----------------------------------------------------------------------------
+
+
+var fvg_lastStartTime = 0
+
+var fvg_records = array.new<Fvg>(0)
+
+bool fvgDetected = false
+string fvgDetectedText = na
+
+if isNewHour
+    new_fvg = request.security(syminfo.tickerid, "60", fvgDetect())
+
+    if not na(new_fvg) and new_fvg.startTime != fvg_lastStartTime
+        new_fvg.startIndex := bar_index - 2 * hourBars
+        fvg_lastStartTime := new_fvg.startTime
+
+        info = createFvgFvgInfo(new_fvg)
+        draw = createFvgDraw(new_fvg, info)
+
+        fvg = Fvg.new(new_fvg, draw, info)
+        fvg_records.unshift(fvg)
+
+        fvgDetected := true
+        fvgDetectedText := getFvgDetectedText(fvg)
+
+//-----------------------------------------------------------------------------
+// FVG - Mitigation Logik
+//-----------------------------------------------------------------------------
+// Boxen rechts verschieben oder "abschließen"
+
+bool fvgShowTouch = false
+string fvgShowTouchInfo = na
+bool fvgShowInvalidated = false
+bool fvgShowAlarm = false
+bool fvgActive = false
+// 
+// float alarmMin = 0
+// float alarmMax = 0
+// bool alarmBull = false
+// 
+
+if fvg_records.size() > 0
+    for i = 0 to fvg_records.size() -1
+        fvg = fvg_records.get(i)
+
+        if not fvg.isDead
+            [_fvg, expired, invalidated, entered, alarmed] = fvgPerformStep(fvg)
+            fvg := _fvg
+
+            if entered
+                fvgShowTouch := true
+                fvgShowTouchInfo := getFvgEnterText(fvg)
+                fvgSetEnterText(fvg)
+
+            if invalidated
+                fvgShowInvalidated := true
+                fvgSetInvalidated(fvg)
+
+            if alarmed
+                fvgShowAlarm := true
+
+                // alarmMin := f.max
+                // alarmMax := f.min
+                // alarmBull := f.isbull
+
+            if expired or invalidated
+                fvg.isDead := true
+            else
+                fvgActive := true
+                box.set_right(fvg.draw.drawBox, bar_index)
+                line.set_x2(fvg.draw.centerLine, bar_index)
+                line.set_x2(fvg.draw.alarmLine, bar_index)
+
+        fvg_records.set(i, fvg)
+
+if fvg_records.size() > 0
+    for i = fvg_records.size()-1 to 0
+        fvg = fvg_records.get(i)
+        if box.get_left(fvg.draw.drawBox) < bar_index - fvgMaxAgeBars
+            box.delete(fvg.draw.drawBox)
+            line.delete(fvg.draw.centerLine)
+            line.delete(fvg.draw.alarmLine)
+            label.delete(fvg.draw.infoLabel)
+            fvg_records.remove(i)
+        
+// 
+// 
+plotshape(fvgShowTouch, style=shape.triangledown, location=location.abovebar, color=color.gray, size=size.tiny)
+plotshape(fvgShowInvalidated, style=shape.xcross, location=location.abovebar, color=color.red, size=size.tiny)
+plotshape(fvgShowAlarm, style=shape.diamond, location=location.abovebar, color=color.green, size=size.normal)
+
+
+//-----------------------------------------------------------------------------}
+//FVG - Alerts
+//-----------------------------------------------------------------------------{
+
+alertcondition(fvgDetected, 'FVG-detected', '{{ticker}} FairValueGap detected')
+alertcondition(fvgActive, 'FVG-present', '{{ticker}} FairValueGap present')
+alertcondition(fvgShowTouch, 'FVG-enter', '{{ticker}} FairValueGap ENTER')
+alertcondition(fvgShowInvalidated, 'FVG-invalid', '{{ticker}} FairValueGap invalidated')
+alertcondition(fvgShowAlarm, 'FVG-ready', '{{ticker}} FairValueGap READY')
+
+if fvgDetected
+    alert(syminfo.ticker + "FVG Detected " + fvgDetectedText, alert.freq_once_per_bar)
+else if fvgShowTouch
+    alert(syminfo.ticker + "FVG Entered " + fvgShowTouchInfo, alert.freq_once_per_bar)
+else if fvgShowInvalidated
+    alert(syminfo.ticker + "FVG Invalidated ", alert.freq_once_per_bar)
+   
