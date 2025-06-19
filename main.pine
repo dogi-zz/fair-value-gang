@@ -47,4 +47,6 @@ indicator("Fair Value Gangster", "FV-Gang", overlay = true, max_lines_count = 50
 //IMPORT rsi-div.main.pine
 
 //IMPORT emas.pine
- 
+
+//IMPORT lsob.functions.pine
+//IMPORT lsob.main.pine

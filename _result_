@@ -40,7 +40,7 @@ indicator("Fair Value Gangster", "FV-Gang", overlay = true, max_lines_count = 50
 
 // =============== FVG ===============
 
-fvgAlarmLevel = input.float(0.25, "FVG-Alarm Level", step=0.1, group="FVG Einstellungen")
+fvgAlarmLevel = input.float(1.75, "FVG-Near Level", step=0.1, group="FVG Einstellungen")
 fvgMaxAge = input.int(72, "FVG-Maximum Age in Hours", group="FVG Einstellungen")
 fvgTouchThreshold = input.float(0.1, "FVG-Touch Threshold", minval=0.0, maxval=1, step=0.01, group="FVG Einstellungen")
 
@@ -54,6 +54,16 @@ fvgPercentThreshold = input.float(0.5, "FVG-Percent-Threshold", minval=0.0, step
 rrrHint = input.bool(true, "RiskReward Hint", group="FVG Risk/Reward")
 rrrFees = input.float(0.04, "Calculation Fees", minval=0.0, step=0.1, group="FVG Risk/Reward")
 fvgRrrTarget = input.float(3, "Desired Range", minval=0.0, step=0.1, group="FVG Risk/Reward")
+
+// ... lsob.settings.pine
+
+losbShow = input.bool(false, "LSOB-Anzeigen", group="LSOB Einstellungen")
+
+lsobCheckDistance = input.int(5, "LSOB-Check distance", group="LSOB Einstellungen")
+lsobMaxAge = input.int(72, "LSOB-Maximum Age in Hours", group="LSOB Einstellungen")
+lsobTouchThreshold = input.float(0.1, "LSOB-Touch Threshold", minval=0.0, maxval=1, step=0.01, group="LSOB Einstellungen")
+
+
 
 // ... side-by-side.settings.pine
 
@@ -176,7 +186,6 @@ type FvgDraw
 type FvgInfo
     string label
     bool  was_invalidated = false
-    bool  was_alarmed = false
     bool  was_entered = false
     float  max_value = 0.0
 
@@ -230,7 +239,6 @@ fvgDetect() =>
     FvgDefinition new_fvg = na
     isBull = after_low > before_high and (after_low - before_high) > threshold
     isBear = after_high < before_low and (before_low - after_high) > threshold
-    // bull
     if after_low > before_high and (after_low - before_high) > threshold
         new_fvg := createFvgDefinition(true, before_high, after_low, open[2])
     if after_high < before_low and (before_low - after_high) > threshold
@@ -262,12 +270,12 @@ fvgGetInvalidated(Fvg fvg) =>
 fvgGetEntered(Fvg fvg) =>
     [height, center, def] = fvgGetHeightCenter(fvg)
     def.isBull ? (low < def.max - height * fvgTouchThreshold) : (high > def.min + height * fvgTouchThreshold)
-
-fvgGetAlarmed(Fvg fvg) =>
+     
+fvgGetNear(Fvg fvg) =>
     [height, center, def] = fvgGetHeightCenter(fvg)
-    def.isBull ? (low < def.max - height * fvgAlarmLevel) : (high > def.min + height * fvgAlarmLevel)
-    
-        
+    alarm_line_level = getFvgAlarmLineLevel(fvg.def)
+    def.isBull ? (low < alarm_line_level) : (high > alarm_line_level)
+     
 fvgSetInvalidated(Fvg fvg) =>
     if fvg.def.isBull
         box.set_bgcolor(fvg.draw.drawBox, bullCssLight)
@@ -285,27 +293,21 @@ fvgSetEnterText(Fvg fvg) =>
 fvgPerformStep(Fvg fvg) =>
     invalidated = false
     entered = false
-    alarmed = false
+    near = false
     expired = (bar_index - fvg.def.startIndex) > fvgMaxAgeBars
     if not expired and not fvg.info.was_invalidated
         fvg.info.max_value := math.max(fvg.info.max_value, fvgGetMaxValue(fvg))
         if fvgGetImpaled(fvg) or fvgGetInvalidated(fvg)
             fvg.info.was_invalidated := true
             invalidated := true
-        else if not fvg.info.was_alarmed and fvgGetAlarmed(fvg)
-            fvg.info.was_alarmed := true
-            fvg.info.was_entered := true
-            alarmed := true
-            entered := true
         else if not fvg.info.was_entered and fvgGetEntered(fvg)
             fvg.info.was_entered := true
             entered := true
+        else if fvgGetNear(fvg)
+            fvg.info.was_entered := true
+            near := true
 
-    [fvg, expired, invalidated, entered, alarmed]
-
-getFvgDetectedText(Fvg fvg) => 
-    [rrrText, percentText] = getRiskRewardTarget(fvg.def.min, fvg.def.max, fvgRrrTarget)
-    "size: " + percentText + (rrrHint?(" needed ratio:" + rrrText) : "")
+    [fvg, expired, invalidated, entered, near]
 
 getFvgEnterText(Fvg fvg) => 
     [rrrText, percentText] = getRiskRewardTarget(fvg.def.min, fvg.def.max, fvgRrrTarget)
@@ -322,9 +324,6 @@ var fvg_lastStartTime = 0
 
 var fvg_records = array.new<Fvg>(0)
 
-bool fvgDetected = false
-string fvgDetectedText = na
-
 if isNewHour
     new_fvg = request.security(syminfo.tickerid, "60", fvgDetect())
 
@@ -338,19 +337,16 @@ if isNewHour
         fvg = Fvg.new(new_fvg, draw, info)
         fvg_records.unshift(fvg)
 
-        fvgDetected := true
-        fvgDetectedText := getFvgDetectedText(fvg)
-
 //-----------------------------------------------------------------------------
 // FVG - Mitigation Logik
 //-----------------------------------------------------------------------------
 // Boxen rechts verschieben oder "abschließen"
 
-bool fvgShowTouch = false
-string fvgShowTouchInfo = na
+bool fvgShowEnter = false
+bool fvgShowNear = false
+string fvgShowEnterInfo = na
+string fvgShowNearInfo = na
 bool fvgShowInvalidated = false
-bool fvgShowAlarm = false
-bool fvgActive = false
 // 
 // float alarmMin = 0
 // float alarmMax = 0
@@ -362,29 +358,26 @@ if fvg_records.size() > 0
         fvg = fvg_records.get(i)
 
         if not fvg.isDead
-            [_fvg, expired, invalidated, entered, alarmed] = fvgPerformStep(fvg)
+            [_fvg, expired, invalidated, entered, near] = fvgPerformStep(fvg)
             fvg := _fvg
 
             if entered
-                fvgShowTouch := true
-                fvgShowTouchInfo := getFvgEnterText(fvg)
+                fvgShowEnter := true
+                fvgShowEnterInfo := getFvgEnterText(fvg)
+                fvgSetEnterText(fvg)
+
+            if near
+                fvgShowNear := true
+                fvgShowNearInfo := getFvgEnterText(fvg)
                 fvgSetEnterText(fvg)
 
             if invalidated
                 fvgShowInvalidated := true
                 fvgSetInvalidated(fvg)
 
-            if alarmed
-                fvgShowAlarm := true
-
-                // alarmMin := f.max
-                // alarmMax := f.min
-                // alarmBull := f.isbull
-
             if expired or invalidated
                 fvg.isDead := true
             else
-                fvgActive := true
                 box.set_right(fvg.draw.drawBox, bar_index)
                 line.set_x2(fvg.draw.centerLine, bar_index)
                 line.set_x2(fvg.draw.alarmLine, bar_index)
@@ -403,27 +396,22 @@ if fvg_records.size() > 0
         
 // 
 // 
-plotshape(fvgShowTouch, style=shape.triangledown, location=location.abovebar, color=color.gray, size=size.tiny)
+plotshape(fvgShowEnter, style=shape.triangledown, location=location.abovebar, color=color.gray, size=size.tiny)
 plotshape(fvgShowInvalidated, style=shape.xcross, location=location.abovebar, color=color.red, size=size.tiny)
-plotshape(fvgShowAlarm, style=shape.diamond, location=location.abovebar, color=color.green, size=size.normal)
 
 
 //-----------------------------------------------------------------------------}
 //FVG - Alerts
 //-----------------------------------------------------------------------------{
 
-alertcondition(fvgDetected, 'FVG-detected', '{{ticker}} FairValueGap detected')
-alertcondition(fvgActive, 'FVG-present', '{{ticker}} FairValueGap present')
-alertcondition(fvgShowTouch, 'FVG-enter', '{{ticker}} FairValueGap ENTER')
-alertcondition(fvgShowInvalidated, 'FVG-invalid', '{{ticker}} FairValueGap invalidated')
-alertcondition(fvgShowAlarm, 'FVG-ready', '{{ticker}} FairValueGap READY')
+//alertcondition(fvgShowEnter, 'FVG-enter', '{{ticker}} FairValueGap ENTER')
+//alertcondition(fvgShowNear, 'FVG-near', '{{ticker}} FairValueGap NEAR')
+//alertcondition(fvgShowInvalidated, 'FVG-invalid', '{{ticker}} FairValueGap invalidated')
 
-if fvgDetected
-    alert(syminfo.ticker + "FVG Detected " + fvgDetectedText, alert.freq_once_per_bar)
-else if fvgShowTouch
-    alert(syminfo.ticker + "FVG Entered " + fvgShowTouchInfo, alert.freq_once_per_bar)
-else if fvgShowInvalidated
-    alert(syminfo.ticker + "FVG Invalidated ", alert.freq_once_per_bar)
+if fvgShowEnter
+    alert(syminfo.ticker + "FVG Entered " + fvgShowEnterInfo, alert.freq_once_per_bar)
+else if fvgShowNear
+    alert(syminfo.ticker + "FVG Near " + fvgShowNearInfo, alert.freq_once_per_bar)
    
 
 
@@ -581,4 +569,160 @@ plot(plotEmas ? ta.ema(close, 50) : na, title="EMA 50", color=color.blue, linewi
 plot(plotEmas ? ta.ema(close, 200) : na, title="EMA 200", color=color.gray, linewidth = 3)
 
 
- 
+
+// ... lsob.functions.pine
+
+lsobMaxAgeBars = lsobMaxAge * hourBars
+
+
+type LsobDefinition 
+    bool  isBull
+    float min
+    float max
+    float startValue
+    int   startTime  // auto
+    int   startIndex = na // manual
+
+createLsobDefinition (bool isBull, float min, float max, float startValue) => 
+    LsobDefinition.new(isBull, min, max,  na, time[2], na)
+    
+type LsobDraw
+    box   drawBox
+    label infoLabel
+
+type Lsob
+    LsobDefinition def
+    LsobDraw draw
+    bool wasLeaved = false
+    bool isDead = false
+    bool isDelete = false
+    bool wasInvalidated = false
+
+
+
+createLsobDraw (LsobDefinition lsob) => 
+    height = lsob.max - lsob.min
+    center_line_level = lsob.min + height * 0.5
+
+    colorBg = color.silver // lsob.isBull ? bullCss : bearCss
+
+    b = box.new(lsob.startIndex, lsob.max, bar_index, lsob.min, border_color = colorBg, bgcolor=color.white)
+    infoLabelText = "LSOB"// + " " + (lsob.isBull?"bull":"bear") + " " + str.tostring(lsob.startTime)
+    infoLabelStyle = lsob.isBull ? label.style_label_upper_left :  label.style_label_lower_left
+    infoLabelY  = lsob.isBull ? lsob.min : lsob.max
+    infoLabel = label.new(lsob.startIndex, infoLabelY, infoLabelText, size=size.small, color=color.silver, textcolor=color.white, style=infoLabelStyle)
+
+    LsobDraw.new(b, infoLabel)
+
+
+lsobIsLeaved(Lsob lsob) =>
+    lsob.def.isBull ? (low > lsob.def.max) : (high < lsob.def.min)
+    
+lsobGetImpaled(Lsob lsob) =>
+    lsob.def.isBull ? (low < lsob.def.min) : (high > lsob.def.max)
+    
+lsobGetInvalidated(Lsob lsob) =>
+    height = lsob.def.max - lsob.def.min
+    touchThreshold = height * lsobTouchThreshold
+    tochGap = lsob.def.isBull ? lsob.def.max - touchThreshold : lsob.def.min + touchThreshold
+    isInvalidated = lsob.def.isBull ? low < tochGap : high > tochGap
+    isInvalidated
+
+lsobDetect() =>
+    highest = ta.highest(lsobCheckDistance)
+    lowest = ta.lowest(lsobCheckDistance)
+    isBull = low == lowest
+    isBear = high == highest
+    LsobDefinition new_lsob = na
+    if isBull
+        new_lsob := createLsobDefinition(true, low, high, open[2])
+    if isBear
+        new_lsob := createLsobDefinition(false, low, high, open[2])
+    new_lsob
+    
+lsobPerformStep(Lsob lsob) =>
+    invalidated = false
+    entered = false
+    near = false
+    expired = (bar_index - lsob.def.startIndex) > lsobMaxAgeBars
+    impaled = lsobGetImpaled(lsob)
+    if not lsob.isDelete and (impaled or expired)
+        lsob.isDelete := true
+    if not lsob.isDelete and not expired
+        if not lsob.wasLeaved
+            if lsobIsLeaved(lsob)
+                lsob.wasLeaved := true
+        else if not lsob.wasInvalidated
+            if lsobGetInvalidated(lsob)
+                lsob.wasInvalidated := true
+
+        //else if not lsob.wasLeaved and lsobIsLeaved(lsob)
+        //    lsob.wasLeaved := true
+        // else if not lsob.info.was_entered and fvgGetEntered(lsob)
+        //     lsob.info.was_entered := true
+        //     entered := true
+        // else if fvgGetNear(lsob)
+        //     lsob.info.was_entered := true
+        //     near := true
+
+    [lsob, entered, near]
+    
+// ... lsob.main.pine
+
+
+var lsob_lastStartTime = 0
+
+var lsob_records = array.new<Lsob>(0)
+
+if losbShow and isNewHour
+    new_lsob = request.security(syminfo.tickerid, "60", lsobDetect())
+
+    if not na(new_lsob) and new_lsob.startTime != lsob_lastStartTime //  and new_lsob.startTime == 1750244400000
+        // label.new(bar_index, high, "Detected", size=size.small, color=color.silver, textcolor=color.black, style=label.style_label_down)
+        new_lsob.startIndex := bar_index
+        lsob_lastStartTime := new_lsob.startTime
+
+        draw = createLsobDraw(new_lsob)
+
+        lsob = Lsob.new(new_lsob, draw)
+        lsob_records.unshift(lsob)
+
+if lsob_records.size() > 0
+    for i = 0 to lsob_records.size() -1
+        lsob = lsob_records.get(i)
+
+        if not lsob.isDead
+            [_lsob, entered, near] = lsobPerformStep(lsob)
+            lsob := _lsob
+
+            // label.new(bar_index, high, str.tostring(low)+" "+str.tostring(lsob.def.min), size=size.small, color=color.silver, textcolor=color.black, style=label.style_label_down)
+
+            // if entered
+            //     fvgShowEnter := true
+            //     fvgShowEnterInfo := getFvgEnterText(lsob)
+            //     fvgSetEnterText(lsob)
+
+            // if near
+            //     fvgShowNear := true
+            //     fvgShowNearInfo := getFvgEnterText(lsob)
+            //     fvgSetEnterText(lsob)
+
+            if lsob.wasInvalidated
+                box.set_bgcolor(lsob.draw.drawBox, color.white)
+
+            if lsob.isDelete or lsob.wasInvalidated
+                lsob.isDead := true
+            else
+                box.set_right(lsob.draw.drawBox, bar_index)
+                if lsob.wasLeaved
+                    box.set_bgcolor(lsob.draw.drawBox, color.silver)
+
+        lsob_records.set(i, lsob)
+        
+if lsob_records.size() > 0
+    for i = lsob_records.size()-1 to 0
+        lsob = lsob_records.get(i)
+        if lsob.isDelete or box.get_left(lsob.draw.drawBox) < bar_index - lsobMaxAgeBars
+            box.delete(lsob.draw.drawBox)
+            label.delete(lsob.draw.infoLabel)
+            lsob_records.remove(i)

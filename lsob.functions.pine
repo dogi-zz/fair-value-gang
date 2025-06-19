@@ -1,0 +1,96 @@
+
+lsobMaxAgeBars = lsobMaxAge * hourBars
+
+
+type LsobDefinition 
+    bool  isBull
+    float min
+    float max
+    float startValue
+    int   startTime  // auto
+    int   startIndex = na // manual
+
+createLsobDefinition (bool isBull, float min, float max, float startValue) => 
+    LsobDefinition.new(isBull, min, max,  na, time[2], na)
+    
+type LsobDraw
+    box   drawBox
+    label infoLabel
+
+type Lsob
+    LsobDefinition def
+    LsobDraw draw
+    bool wasLeaved = false
+    bool isDead = false
+    bool isDelete = false
+    bool wasInvalidated = false
+
+
+
+createLsobDraw (LsobDefinition lsob) => 
+    height = lsob.max - lsob.min
+    center_line_level = lsob.min + height * 0.5
+
+    colorBg = color.silver // lsob.isBull ? bullCss : bearCss
+
+    b = box.new(lsob.startIndex, lsob.max, bar_index, lsob.min, border_color = colorBg, bgcolor=color.white)
+    infoLabelText = "LSOB"// + " " + (lsob.isBull?"bull":"bear") + " " + str.tostring(lsob.startTime)
+    infoLabelStyle = lsob.isBull ? label.style_label_upper_left :  label.style_label_lower_left
+    infoLabelY  = lsob.isBull ? lsob.min : lsob.max
+    infoLabel = label.new(lsob.startIndex, infoLabelY, infoLabelText, size=size.small, color=color.silver, textcolor=color.white, style=infoLabelStyle)
+
+    LsobDraw.new(b, infoLabel)
+
+
+lsobIsLeaved(Lsob lsob) =>
+    lsob.def.isBull ? (low > lsob.def.max) : (high < lsob.def.min)
+    
+lsobGetImpaled(Lsob lsob) =>
+    lsob.def.isBull ? (low < lsob.def.min) : (high > lsob.def.max)
+    
+lsobGetInvalidated(Lsob lsob) =>
+    height = lsob.def.max - lsob.def.min
+    touchThreshold = height * lsobTouchThreshold
+    tochGap = lsob.def.isBull ? lsob.def.max - touchThreshold : lsob.def.min + touchThreshold
+    isInvalidated = lsob.def.isBull ? low < tochGap : high > tochGap
+    isInvalidated
+
+lsobDetect() =>
+    highest = ta.highest(lsobCheckDistance)
+    lowest = ta.lowest(lsobCheckDistance)
+    isBull = low == lowest
+    isBear = high == highest
+    LsobDefinition new_lsob = na
+    if isBull
+        new_lsob := createLsobDefinition(true, low, high, open[2])
+    if isBear
+        new_lsob := createLsobDefinition(false, low, high, open[2])
+    new_lsob
+    
+lsobPerformStep(Lsob lsob) =>
+    invalidated = false
+    entered = false
+    near = false
+    expired = (bar_index - lsob.def.startIndex) > lsobMaxAgeBars
+    impaled = lsobGetImpaled(lsob)
+    if not lsob.isDelete and (impaled or expired)
+        lsob.isDelete := true
+    if not lsob.isDelete and not expired
+        if not lsob.wasLeaved
+            if lsobIsLeaved(lsob)
+                lsob.wasLeaved := true
+        else if not lsob.wasInvalidated
+            if lsobGetInvalidated(lsob)
+                lsob.wasInvalidated := true
+
+        //else if not lsob.wasLeaved and lsobIsLeaved(lsob)
+        //    lsob.wasLeaved := true
+        // else if not lsob.info.was_entered and fvgGetEntered(lsob)
+        //     lsob.info.was_entered := true
+        //     entered := true
+        // else if fvgGetNear(lsob)
+        //     lsob.info.was_entered := true
+        //     near := true
+
+    [lsob, entered, near]
+    

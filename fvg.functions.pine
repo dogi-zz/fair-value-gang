@@ -23,7 +23,6 @@ type FvgDraw
 type FvgInfo
     string label
     bool  was_invalidated = false
-    bool  was_alarmed = false
     bool  was_entered = false
     float  max_value = 0.0
 
@@ -77,7 +76,6 @@ fvgDetect() =>
     FvgDefinition new_fvg = na
     isBull = after_low > before_high and (after_low - before_high) > threshold
     isBear = after_high < before_low and (before_low - after_high) > threshold
-    // bull
     if after_low > before_high and (after_low - before_high) > threshold
         new_fvg := createFvgDefinition(true, before_high, after_low, open[2])
     if after_high < before_low and (before_low - after_high) > threshold
@@ -109,12 +107,12 @@ fvgGetInvalidated(Fvg fvg) =>
 fvgGetEntered(Fvg fvg) =>
     [height, center, def] = fvgGetHeightCenter(fvg)
     def.isBull ? (low < def.max - height * fvgTouchThreshold) : (high > def.min + height * fvgTouchThreshold)
-
-fvgGetAlarmed(Fvg fvg) =>
+     
+fvgGetNear(Fvg fvg) =>
     [height, center, def] = fvgGetHeightCenter(fvg)
-    def.isBull ? (low < def.max - height * fvgAlarmLevel) : (high > def.min + height * fvgAlarmLevel)
-    
-        
+    alarm_line_level = getFvgAlarmLineLevel(fvg.def)
+    def.isBull ? (low < alarm_line_level) : (high > alarm_line_level)
+     
 fvgSetInvalidated(Fvg fvg) =>
     if fvg.def.isBull
         box.set_bgcolor(fvg.draw.drawBox, bullCssLight)
@@ -132,27 +130,21 @@ fvgSetEnterText(Fvg fvg) =>
 fvgPerformStep(Fvg fvg) =>
     invalidated = false
     entered = false
-    alarmed = false
+    near = false
     expired = (bar_index - fvg.def.startIndex) > fvgMaxAgeBars
     if not expired and not fvg.info.was_invalidated
         fvg.info.max_value := math.max(fvg.info.max_value, fvgGetMaxValue(fvg))
         if fvgGetImpaled(fvg) or fvgGetInvalidated(fvg)
             fvg.info.was_invalidated := true
             invalidated := true
-        else if not fvg.info.was_alarmed and fvgGetAlarmed(fvg)
-            fvg.info.was_alarmed := true
-            fvg.info.was_entered := true
-            alarmed := true
-            entered := true
         else if not fvg.info.was_entered and fvgGetEntered(fvg)
             fvg.info.was_entered := true
             entered := true
+        else if fvgGetNear(fvg)
+            fvg.info.was_entered := true
+            near := true
 
-    [fvg, expired, invalidated, entered, alarmed]
-
-getFvgDetectedText(Fvg fvg) => 
-    [rrrText, percentText] = getRiskRewardTarget(fvg.def.min, fvg.def.max, fvgRrrTarget)
-    "size: " + percentText + (rrrHint?(" needed ratio:" + rrrText) : "")
+    [fvg, expired, invalidated, entered, near]
 
 getFvgEnterText(Fvg fvg) => 
     [rrrText, percentText] = getRiskRewardTarget(fvg.def.min, fvg.def.max, fvgRrrTarget)
