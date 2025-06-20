@@ -29,12 +29,12 @@ if lsob_records.size() > 0
 
             // if entered
             //     fvgShowEnter := true
-            //     fvgShowEnterInfo := getFvgEnterText(lsob)
+            //     fvgShowEnterInfo := fvgGetEnterText(lsob)
             //     fvgSetEnterText(lsob)
 
             // if near
             //     fvgShowNear := true
-            //     fvgShowNearInfo := getFvgEnterText(lsob)
+            //     fvgShowNearInfo := fvgGetEnterText(lsob)
             //     fvgSetEnterText(lsob)
 
             if lsob.wasInvalidated
