@@ -29,27 +29,31 @@ indicator("Fair Value Gangster", "FV-Gang", overlay = true, max_lines_count = 50
 
 
 
-
 //------------------------------------------------------------------------------
 //Settings
 //-----------------------------------------------------------------------------
 
 // ... settings.pine
 
+currentHourTime = timestamp("UTC", year, month, dayofmonth, hour, 0)
+isNewHour = currentHourTime != currentHourTime[1]
+hourBars = (60 / timeframe.multiplier)
+
+
 // ... fvg.settings.pine
 
 // =============== FVG ===============
 
-fvgAlarmLevel = input.float(1.75, "FVG-Near Level", step=0.1, group="FVG Einstellungen")
 fvgMaxAge = input.int(72, "FVG-Maximum Age in Hours", group="FVG Einstellungen")
+fvgAlarmLevel = input.float(0.75, "FVG-Near Level", step=0.1, group="FVG Einstellungen")
 fvgTouchThreshold = input.float(0.1, "FVG-Touch Threshold", minval=0.0, maxval=1, step=0.01, group="FVG Einstellungen")
+
+fvgMaxAgeBars = fvgMaxAge * hourBars
 
 fvgInSizeLimitMode = input.string("percent", "FVG-GrößenLimit", options=["percent", "atr"], group="FVG Einstellungen")
 fvgAtrLength = input.int(14, "FVG-ATR Length", group="FVG Einstellungen")
 fvgAtrFactor = input.float(0.5, "FVG-Threshold Factor", minval=0.0, step=0.1, group="FVG Einstellungen")
 fvgPercentThreshold = input.float(0.5, "FVG-Percent-Threshold", minval=0.0, step=0.1, group="FVG Einstellungen")
-
-
 
 rrrHint = input.bool(true, "RiskReward Hint", group="FVG Risk/Reward")
 rrrFees = input.float(0.04, "Calculation Fees", minval=0.0, step=0.1, group="FVG Risk/Reward")
@@ -92,6 +96,8 @@ rsiRangeUpper = input.int(title="RSI Max of Lookback Range", defval=60, display 
 rsiRangeLower = input.int(title="RSI Min of Lookback Range", defval=5, display = display.data_window, group="RSI - Divergence")
 
 
+rsiOffsetLeft = rsiLookbackR * hourBars
+rsiOffsetRight = rsiLookbackR * hourBars
 
 
 
@@ -138,64 +144,40 @@ proportionPercent(baseValue, propotionValue) =>
 approxEq(value, target, tollerance) =>
     math.abs(value - target) < tollerance
         
-currentHourTime = timestamp("UTC", year, month, dayofmonth, hour, 0)
-isNewHour = currentHourTime != currentHourTime[1]
 
-hourBars = (60 / timeframe.multiplier)
+getConditionalText(condition, txt, prefix) =>
+    condition ? ( prefix + txt ) : ""
 
-getRiskRewardTarget (min, max, rrrTarget) =>
+getNumberText(num) =>
+    num < 1 ? ("0" + str.tostring(num, "#.0")) : str.tostring(num, "#.0")
+    
+    
+getRiskRewardTargetFromSize (min, max, rrrTarget) =>
   sizePercent = (max - min) / min * 100,
   rrrSL = sizePercent / 2 + rrrFees,
   rrrTP = rrrSL * rrrTarget + rrrFees,
-  rrrText = rrrHint ? str.tostring((rrrSL + rrrTP)/rrrSL, "#.0") : "",
+  rrrTargetText = rrrHint ? ("1:" + getNumberText((rrrSL + rrrTP)/rrrSL)) : "",
   percentText = str.tostring(sizePercent, format.percent),
-  [rrrText, percentText]
+  [percentText, rrrTargetText]
+
+getPercentFromSize (min, max) =>
+  sizePercent = (max - min) / min * 100,
+  sizePercent
+
 
 getMaxRatioText (min, max, max_value) =>
   sizePercent = (max - min) / min * 100,
   center = (max - min) / 2,
   maxPercent = math.abs(max_value - center) / min * 100,
   sl = sizePercent / 2,
-  str.tostring((maxPercent + sl), "#.0")
+  "1:" + getNumberText(maxPercent + sl)
   
   
 
 // ... fvg.functions.pine
-fvgMaxAgeBars = fvgMaxAge * hourBars
 
-
-type FvgDefinition 
-    bool  isBull
-    float min
-    float max
-    float startValue
-    int   startTime  // auto
-    int   startIndex = na // manual
- 
-createFvgDefinition (bool isBull, float min, float max, float startValue) => 
-    FvgDefinition.new(isBull, min, max,  na, time[2], na)
-     
-
-type FvgDraw
-    box   drawBox
-    line  centerLine
-    line  alarmLine
-    label infoLabel
-
-
-type FvgInfo
-    string label
-    bool  was_invalidated = false
-    bool  was_entered = false
-    float  max_value = 0.0
-
-type Fvg
-    FvgDefinition def
-    FvgDraw draw
-    FvgInfo info
-    bool isDead = false
-
-
+fvgDebug = false
+fvgDebugStartTime = 0
 fvgAtrHour = request.security(syminfo.tickerid, "60", ta.atr(fvgAtrLength))
 
 getFvgThreshold() =>
@@ -204,31 +186,92 @@ getFvgThreshold() =>
     else
         fvgAtrHour * fvgAtrFactor
 
-getFvgAlarmLineLevel(FvgDefinition fvg) =>
-    height = fvg.max - fvg.min
-    if fvg.isBull
-        fvg.max - height * fvgAlarmLevel
+getFvgAlarmLineLevel(isBull, min, max) =>
+    height = max - min
+    if isBull
+        max + height * fvgAlarmLevel
     else
-        fvg.min + height * fvgAlarmLevel
+        min - height * fvgAlarmLevel
 
-createFvgFvgInfo(FvgDefinition fvg) => 
-    [rrrText, percentText] = getRiskRewardTarget(fvg.min, fvg.max, fvgRrrTarget)
-    FvgInfo.new(percentText + (rrrHint?(" 1:"+rrrText):""))
+
+//-----------------------------------------------------------------------------
+
+type FvgDefinition 
+    bool  isBull
+    float min
+    float max
+    float alarmLevel
+    float startValue
+    int   startTime  // auto
+    int   startIndex = na // manual
+ 
+createFvgDefinition (bool isBull, float min, float max, float startValue) => 
+    alarm_level = getFvgAlarmLineLevel(isBull, min, max)
+    FvgDefinition.new(isBull, min, max, alarm_level, na, time[2], na)
+
+//-----------------------------------------------------------------------------
+
+type FvgState
+    string label
+    bool  was_invalidated = false
+    bool  was_invalidate_enter = false
+    bool  was_near = false
+    bool  was_entered = false
+    float  max_value = 0.0
+    bool isDead = false
+
+createFvgFvgState(FvgDefinition fvg) => 
+    [percentText, rrrTargetText] = getRiskRewardTargetFromSize(fvg.min, fvg.max, fvgRrrTarget)
+    label = percentText + getConditionalText(rrrHint, rrrTargetText, " ") + getConditionalText(fvgDebug, str.tostring(fvg.startTime), " ")
+    FvgState.new()
+    
+//-----------------------------------------------------------------------------
+
+type FvgDraw
+    box   drawBox
+    line  centerLine
+    line  alarmLine
+    label infoLabel
+
         
-createFvgDraw (FvgDefinition fvg, FvgInfo info) => 
+createFvgDraw (FvgDefinition fvg, FvgState state) => 
     height = fvg.max - fvg.min
     center_line_level = fvg.min + height * 0.5
-    alarm_line_level = getFvgAlarmLineLevel(fvg)
 
     colorBg = fvg.isBull ? bullCss : bearCss
     colorLine = fvg.isBull ? bullCssBorder : bearCssBorder
 
     b = box.new(fvg.startIndex, fvg.max, bar_index, fvg.min, bgcolor = colorBg, border_color = colorLine)
     l1 = line.new(x1=fvg.startIndex, y1=center_line_level, x2=bar_index, y2=center_line_level, color=color.gray, style=line.style_dotted, xloc=xloc.bar_index)
-    l2 = line.new(x1=fvg.startIndex, y1=alarm_line_level, x2=bar_index, y2=alarm_line_level, color=colorLine, style=line.style_dotted, xloc=xloc.bar_index)
-    infoLabel = label.new(fvg.startIndex+1, center_line_level, info.label, size=size.small, color=colorLine, textcolor=textColor, style=label.style_label_left)
+    l2 = line.new(x1=fvg.startIndex, y1=fvg.alarmLevel, x2=bar_index, y2=fvg.alarmLevel, color=colorLine, style=line.style_dotted, xloc=xloc.bar_index)
+    infoLabel = label.new(fvg.startIndex+1, center_line_level, state.label, size=size.small, color=colorLine, textcolor=textColor, style=label.style_label_left)
 
     FvgDraw.new(b, l1, l2, infoLabel)
+    
+fvgDrawSetInvalidated(FvgDraw draw, FvgDefinition def) =>
+    if def.isBull
+        box.set_bgcolor(draw.drawBox, bullCssLight)
+        box.set_border_color(draw.drawBox, bullCssBorderLight)
+    else 
+        box.set_bgcolor(draw.drawBox, bearCssLight)
+        box.set_border_color(draw.drawBox, bearCssBorderLight)
+
+fvgDrawRemove(FvgDraw draw) =>
+    box.delete(draw.drawBox)
+    line.delete(draw.centerLine)
+    line.delete(draw.alarmLine)
+    label.delete(draw.infoLabel)
+
+
+//-----------------------------------------------------------------------------
+
+type Fvg
+    FvgDefinition def
+    FvgDraw draw
+    FvgState state
+
+//-----------------------------------------------------------------------------
+
 
 fvgDetect() =>
     threshold = getFvgThreshold()
@@ -250,79 +293,123 @@ fvgDetect() =>
 fvgGetHeightCenter(Fvg fvg) =>
     height = fvg.def.max - fvg.def.min
     center = fvg.def.min + height / 2
-    [height, center, fvg.def]
+    [height, center]
 
 fvgGetMaxValue(Fvg fvg) =>
-    [height, center, def] = fvgGetHeightCenter(fvg)
-    def.isBull ? (close - center) : (center - close)
+    [height, center] = fvgGetHeightCenter(fvg)
+    fvg.def.isBull ? (close - center) : (center - close)
 
 fvgGetImpaled(Fvg fvg) =>
-    [height, center, def] = fvgGetHeightCenter(fvg)
+    def = fvg.def
+    [height, center] = fvgGetHeightCenter(fvg)
     def.isBull ? (low  < def.min) : (high > def.max)
-    
-fvgGetInvalidated(Fvg fvg) =>
-    [height, center, def] = fvgGetHeightCenter(fvg)
-    touchThreshold = height * fvgTouchThreshold
-    tochGap = def.isBull ? def.max - touchThreshold : def.min + touchThreshold
-    touchAndLeave = def.isBull ? (close[1] > def.max and low[1] < tochGap) : (close[1] < def.min and high[1] > tochGap)
-    inAndOut = def.isBull ? (close[2] < def.max and close[1] > def.max) : (close[2] > def.min and close[1] < def.min)
 
-fvgGetEntered(Fvg fvg) =>
-    [height, center, def] = fvgGetHeightCenter(fvg)
-    def.isBull ? (low < def.max - height * fvgTouchThreshold) : (high > def.min + height * fvgTouchThreshold)
+fvgGetEntered(Fvg fvg, threshold) =>
+    def = fvg.def
+    [height, center] = fvgGetHeightCenter(fvg)
+    def.isBull ? (low < def.max - height * threshold) : (high > def.min + height * threshold)
+     
+fvgGetCloseOutside(Fvg fvg) =>
+    def = fvg.def
+    def.isBull ? (close[1] > def.max) : (close[1] > def.min)
      
 fvgGetNear(Fvg fvg) =>
-    [height, center, def] = fvgGetHeightCenter(fvg)
-    alarm_line_level = getFvgAlarmLineLevel(fvg.def)
-    def.isBull ? (low < alarm_line_level) : (high > alarm_line_level)
+    def = fvg.def
+    [height, center] = fvgGetHeightCenter(fvg)
+    def.isBull ? (low < def.alarmLevel) : (high > def.alarmLevel)
      
-fvgSetInvalidated(Fvg fvg) =>
-    if fvg.def.isBull
-        box.set_bgcolor(fvg.draw.drawBox, bullCssLight)
-        box.set_border_color(fvg.draw.drawBox, bullCssBorderLight)
-    else 
-        box.set_bgcolor(fvg.draw.drawBox, bearCssLight)
-        box.set_border_color(fvg.draw.drawBox, bearCssBorderLight)
 
 fvgSetEnterText(Fvg fvg) =>
-    [rrrText, percentText] = getRiskRewardTarget(fvg.def.min, fvg.def.max, fvgRrrTarget)
-    new_text = percentText + " 1:" + getMaxRatioText(fvg.def.min, fvg.def.max, fvg.info.max_value) + (rrrHint?("/ 1:" + rrrText) : "")
-    label.set_text(fvg.draw.infoLabel, new_text)
-
+    [percentText, rrrTargetText] = getRiskRewardTargetFromSize(fvg.def.min, fvg.def.max, fvgRrrTarget)
+    new_text = percentText + " " + getMaxRatioText(fvg.def.min, fvg.def.max, fvg.state.max_value) + getConditionalText(rrrHint, rrrTargetText, " ")
+    label.set_text(fvg.draw.infoLabel, new_text + getConditionalText(fvgDebug, str.tostring(fvg.def.startTime), " "))
+  
+fvgGetDetectedText(Fvg fvg) => 
+    sizePrecent = getPercentFromSize(fvg.def.min, fvg.def.max)
+    sizePercentText = str.tostring(sizePrecent, "#.0")
+    tagContent = "tf:"+str.tostring(timeframe.period)
+    tagContent := tagContent + "," + "ts:"+str.tostring(fvg.def.startTime)
+    tagContent := tagContent + "," + "dir:"+(fvg.def.isBull?'bull':'bear')
+    tagContent := tagContent + "," + "type:"+"FVG-DETECTED"
+    tagContent := tagContent + "," + "size:"+sizePercentText
+    "size:"+sizePercentText+"["+tagContent+"]"
+    
+fvgGetEnteredText(Fvg fvg) => 
+    sizePrecent = getPercentFromSize(fvg.def.min, fvg.def.max)
+    sizePercentText = str.tostring(sizePrecent, "#.0")
+    maxRatioText = getMaxRatioText(fvg.def.min, fvg.def.max, fvg.state.max_value)
+    tagContent = "tf:"+str.tostring(timeframe.period)
+    tagContent := tagContent + "," + "ts:"+str.tostring(fvg.def.startTime)
+    tagContent := tagContent + "," + "dir:"+(fvg.def.isBull?'bull':'bear')
+    tagContent := tagContent + "," + "type:"+"FVG-ENTER"
+    tagContent := tagContent + "," + "size:"+sizePercentText
+    tagContent := tagContent + "," + "ratio:"+maxRatioText
+    "size:"+sizePercentText+"["+tagContent+"]"
+        
+fvgGetNearText(Fvg fvg) => 
+    sizePrecent = getPercentFromSize(fvg.def.min, fvg.def.max)
+    sizePercentText = str.tostring(sizePrecent, "#.0")
+    maxRatioText = getMaxRatioText(fvg.def.min, fvg.def.max, fvg.state.max_value)
+    tagContent = "tf:"+str.tostring(timeframe.period)
+    tagContent := tagContent + "," + "ts:"+str.tostring(fvg.def.startTime)
+    tagContent := tagContent + "," + "dir:"+(fvg.def.isBull?'bull':'bear')
+    tagContent := tagContent + "," + "type:"+"FVG-NEAR"
+    tagContent := tagContent + "," + "size:"+sizePercentText
+    tagContent := tagContent + "," + "ratio:"+maxRatioText
+    "size:"+sizePercentText+"["+tagContent+"]"
+        
+fvgGetInvalidatedText(Fvg fvg) => 
+    sizePrecent = getPercentFromSize(fvg.def.min, fvg.def.max)
+    sizePercentText = str.tostring(sizePrecent, "#.0")
+    maxRatioText = getMaxRatioText(fvg.def.min, fvg.def.max, fvg.state.max_value)
+    tagContent = "tf:"+str.tostring(timeframe.period)
+    tagContent := tagContent + "," + "ts:"+str.tostring(fvg.def.startTime)
+    tagContent := tagContent + "," + "dir:"+(fvg.def.isBull?'bull':'bear')
+    tagContent := tagContent + "," + "type:"+"FVG-INVALIDATED"
+    "size:"+sizePercentText+"["+tagContent+"]"
         
 fvgPerformStep(Fvg fvg) =>
-    invalidated = false
-    entered = false
-    near = false
+    actionInvalidate = false
+    actionEntered = false
+    actionNear = false
     expired = (bar_index - fvg.def.startIndex) > fvgMaxAgeBars
-    if not expired and not fvg.info.was_invalidated
-        fvg.info.max_value := math.max(fvg.info.max_value, fvgGetMaxValue(fvg))
-        if fvgGetImpaled(fvg) or fvgGetInvalidated(fvg)
-            fvg.info.was_invalidated := true
-            invalidated := true
-        else if not fvg.info.was_entered and fvgGetEntered(fvg)
-            fvg.info.was_entered := true
-            entered := true
-        else if fvgGetNear(fvg)
-            fvg.info.was_entered := true
-            near := true
+    state = fvg.state
+    if not expired and not fvg.state.was_invalidated
+        state.max_value := math.max(state.max_value, fvgGetMaxValue(fvg))
+        if fvgGetImpaled(fvg)
+            state.was_invalidated := true
+            actionInvalidate := true
+            state.isDead := true
+        else if not state.was_invalidate_enter and fvgGetEntered(fvg, fvgTouchThreshold)
+            state.was_invalidate_enter := true
+        else if isNewHour and state.was_invalidate_enter and fvgGetCloseOutside(fvg)
+            state.was_invalidated := true
+            actionInvalidate := true
+            state.isDead := true
+        
+        if not state.was_entered and fvgGetEntered(fvg, 0.)
+            state.was_entered := true
+            actionEntered := true
+        else if not state.was_near and fvgGetNear(fvg)
+            state.was_near := true
+            actionNear := true
+    else
+        state.isDead := true
+    [state, actionInvalidate, actionEntered, actionNear]
 
-    [fvg, expired, invalidated, entered, near]
-
-getFvgEnterText(Fvg fvg) => 
-    [rrrText, percentText] = getRiskRewardTarget(fvg.def.min, fvg.def.max, fvgRrrTarget)
-    "size: " + percentText + (rrrHint?(" needed ratio:" + rrrText) : "") + "possible ratio: " + getMaxRatioText(fvg.def.min, fvg.def.max, fvg.info.max_value)
 
 // ... fvg.main.pine
   
 //-----------------------------------------------------------------------------
-// FVG - detection/display
+// FVG - Detection and display
 //-----------------------------------------------------------------------------
 
 
 var fvg_lastStartTime = 0
-
 var fvg_records = array.new<Fvg>(0)
+
+bool fvgDetected = false
+string fvgDetectedText = ""
 
 if isNewHour
     new_fvg = request.security(syminfo.tickerid, "60", fvgDetect())
@@ -331,11 +418,14 @@ if isNewHour
         new_fvg.startIndex := bar_index - 2 * hourBars
         fvg_lastStartTime := new_fvg.startTime
 
-        info = createFvgFvgInfo(new_fvg)
-        draw = createFvgDraw(new_fvg, info)
+        state = createFvgFvgState(new_fvg)
+        draw = createFvgDraw(new_fvg, state)
 
-        fvg = Fvg.new(new_fvg, draw, info)
+        fvg = Fvg.new(new_fvg, draw, state)
         fvg_records.unshift(fvg)
+
+        fvgDetected := true
+        fvgDetectedText := fvgGetDetectedText(fvg)
 
 //-----------------------------------------------------------------------------
 // FVG - Mitigation Logik
@@ -344,8 +434,8 @@ if isNewHour
 
 bool fvgShowEnter = false
 bool fvgShowNear = false
-string fvgShowEnterInfo = na
-string fvgShowNearInfo = na
+string fvgShowEnterText = na
+string fvgShowNearText = na
 bool fvgShowInvalidated = false
 // 
 // float alarmMin = 0
@@ -357,27 +447,25 @@ if fvg_records.size() > 0
     for i = 0 to fvg_records.size() -1
         fvg = fvg_records.get(i)
 
-        if not fvg.isDead
-            [_fvg, expired, invalidated, entered, near] = fvgPerformStep(fvg)
-            fvg := _fvg
+        if not fvg.state.isDead and (fvgDebugStartTime == 0 or fvg.def.startTime == fvgDebugStartTime)
+            [state, actionInvalidate, actionEntered, actionNear] = fvgPerformStep(fvg)
+            fvg.state := state
 
-            if entered
+            if actionEntered
                 fvgShowEnter := true
-                fvgShowEnterInfo := getFvgEnterText(fvg)
+                fvgShowEnterText := fvgGetEnteredText(fvg)
                 fvgSetEnterText(fvg)
 
-            if near
+            if actionNear
                 fvgShowNear := true
-                fvgShowNearInfo := getFvgEnterText(fvg)
+                fvgShowNearText := fvgGetNearText(fvg)
                 fvgSetEnterText(fvg)
 
-            if invalidated
+            if actionInvalidate
                 fvgShowInvalidated := true
-                fvgSetInvalidated(fvg)
+                fvgDrawSetInvalidated(fvg.draw, fvg.def)
 
-            if expired or invalidated
-                fvg.isDead := true
-            else
+            if not state.isDead
                 box.set_right(fvg.draw.drawBox, bar_index)
                 line.set_x2(fvg.draw.centerLine, bar_index)
                 line.set_x2(fvg.draw.alarmLine, bar_index)
@@ -388,16 +476,14 @@ if fvg_records.size() > 0
     for i = fvg_records.size()-1 to 0
         fvg = fvg_records.get(i)
         if box.get_left(fvg.draw.drawBox) < bar_index - fvgMaxAgeBars
-            box.delete(fvg.draw.drawBox)
-            line.delete(fvg.draw.centerLine)
-            line.delete(fvg.draw.alarmLine)
-            label.delete(fvg.draw.infoLabel)
+            fvgDrawRemove(fvg.draw)
             fvg_records.remove(i)
         
 // 
 // 
 plotshape(fvgShowEnter, style=shape.triangledown, location=location.abovebar, color=color.gray, size=size.tiny)
 plotshape(fvgShowInvalidated, style=shape.xcross, location=location.abovebar, color=color.red, size=size.tiny)
+plotshape(fvgShowNear, style=shape.flag, location=location.abovebar, color=color.lime, size=size.tiny)
 
 
 //-----------------------------------------------------------------------------}
@@ -409,10 +495,12 @@ plotshape(fvgShowInvalidated, style=shape.xcross, location=location.abovebar, co
 //alertcondition(fvgShowInvalidated, 'FVG-invalid', '{{ticker}} FairValueGap invalidated')
 
 if fvgShowEnter
-    alert(syminfo.ticker + "FVG Entered " + fvgShowEnterInfo, alert.freq_once_per_bar)
+    alert(syminfo.ticker + "FVG Entered " + fvgShowEnterText, alert.freq_once_per_bar)
 else if fvgShowNear
-    alert(syminfo.ticker + "FVG Near " + fvgShowNearInfo, alert.freq_once_per_bar)
-   
+    alert(syminfo.ticker + "FVG Near " + fvgShowNearText, alert.freq_once_per_bar)
+else if fvgDetected
+    alert(syminfo.ticker + "FVG detected " + fvgDetectedText, alert.freq_once_per_bar)
+    
 
 
 // ... side-by-side.pine
@@ -478,38 +566,63 @@ if spsBear
 
 
 
-rsiOsc = ta.rsi(close, rsiLength)
 
-rsiPlFound = na(ta.pivotlow(rsiOsc, rsiLookbackL, rsiLookbackR)) ? false : true
-rsiPhFound = na(ta.pivothigh(rsiOsc, rsiLookbackL, rsiLookbackR)) ? false : true
 
 rsiIsInRange(cond) =>
 	bars = ta.barssince(cond == true)
 	rsiRangeLower <= bars and bars <= rsiRangeUpper
 
-//------------------------------------------------------------------------------
-// Regular Bullish
-// Osc: Higher Low
-rsiInRangePl = rsiIsInRange(rsiPlFound[1])
-oscHL = rsiOsc[rsiLookbackR] > ta.valuewhen(rsiPlFound, rsiOsc[rsiLookbackR], 1) and rsiInRangePl
 
-// Price: Lower Low
-rsiPriceLL = low[rsiLookbackR] < ta.valuewhen(rsiPlFound, low[rsiLookbackR], 1)
-rsiBullCondAlert = rsiPriceLL and oscHL and rsiPlFound
-rsiBullCond = rsiOsc < 30 and rsiBullCondAlert
- 
+rsiDetect() =>
+    rsiOsc = ta.rsi(close, rsiLength)
+
+    // Bullish
+    plFound = na(ta.pivotlow(rsiOsc, rsiLookbackL, rsiLookbackR)) ? false : true
+    inRangePl = rsiIsInRange(plFound[1])
+    oscHL = rsiOsc[rsiLookbackR] > ta.valuewhen(plFound, rsiOsc[rsiLookbackR], 1) and inRangePl
+    // Price: Lower Low
+    rsiPriceLL = low[rsiLookbackR] < ta.valuewhen(plFound, low[rsiLookbackR], 1)
+    bullCondAlert = rsiPriceLL and oscHL and plFound
+    bullAlertCond = rsiOsc < 30 and bullCondAlert
+
+    // Bearish
+    phFound = na(ta.pivothigh(rsiOsc, rsiLookbackL, rsiLookbackR)) ? false : true
+    inRangePh = rsiIsInRange(phFound[1])
+    oscLH = rsiOsc[rsiLookbackR] < ta.valuewhen(phFound, rsiOsc[rsiLookbackR], 1) and inRangePh
+
+    // Price: Higher High
+    rsiPriceHH = high[rsiLookbackR] > ta.valuewhen(phFound, high[rsiLookbackR], 1)
+
+    bearCondAlert = rsiPriceHH and oscLH and phFound
+    bearAlertCond = rsiOsc > 70 and bearCondAlert
+
+
+    [plFound, bullAlertCond, phFound, bearAlertCond]
+
+rsi60PlFound = false
+rsi60BullAlertCond = false
+rsi60PhFound = false
+rsi60BearAlertCond = false
+if isNewHour
+    [_rsi60PlFound, _rsi60BullAlertCond, _rsi60PhFound, _rsi60BearAlertCond] = request.security(syminfo.tickerid, "60", rsiDetect())
+    rsi60PlFound := _rsi60PlFound
+    rsi60BullAlertCond := _rsi60BullAlertCond
+    rsi60PhFound := _rsi60PhFound
+    rsi60BearAlertCond := _rsi60BearAlertCond
+
+// Bullish
 plot(
-  rsiPlFound ? low[rsiLookbackR] : na,
-  offset=-rsiLookbackR,
+  rsi60PlFound ? low[rsiOffsetRight] : na,
+  offset=-rsiOffsetRight,
   title="Regular Bullish",
   linewidth=2,
-  color=(rsiBullCond ? bullCssBorderLight : noneColor),
+  color=(rsi60BullAlertCond ? bullCssBorderLight : noneColor),
   display = display.pane
   )
 
 plotshape(
-  rsiBullCond ? low[rsiLookbackR] : na,
-  offset=-rsiLookbackR,
+  rsi60BullAlertCond ? low[rsiOffsetRight] : na,
+  offset=-rsiOffsetRight,
   title="Regular Bullish Label",
   text="RSI-Div Bull",
   style=shape.labelup,
@@ -518,32 +631,19 @@ plotshape(
   textcolor=textColor
   )
 
-
-//------------------------------------------------------------------------------
-// Regular Bearish
-// Osc: Lower High
-rsiInRangePh = rsiIsInRange(rsiPhFound[1])
-rsiOscLH = rsiOsc[rsiLookbackR] < ta.valuewhen(rsiPhFound, rsiOsc[rsiLookbackR], 1) and rsiInRangePh
-
-// Price: Higher High
-
-rsiPriceHH = high[rsiLookbackR] > ta.valuewhen(rsiPhFound, high[rsiLookbackR], 1)
-
-rsiBearCondAlert = rsiPriceHH and rsiOscLH and rsiPhFound
-rsiBearCond = rsiOsc > 70 and rsiBearCondAlert
-
+ // Bearish
 plot(
-  rsiPhFound ? high[rsiLookbackR] : na,
-  offset=-rsiLookbackR,
+  rsi60PhFound ? high[rsiOffsetRight] : na,
+  offset=-rsiOffsetRight,
   title="Regular Bearish",
   linewidth=2,
-  color=(rsiBearCond ? bearCssBorderLight : noneColor),
+  color=(rsi60BearAlertCond ? bearCssBorderLight : noneColor),
   display = display.pane
   )
 
 plotshape(
-  rsiBearCond ? high[rsiLookbackR] : na,
-  offset=-rsiLookbackR,
+  rsi60BearAlertCond ? high[rsiOffsetRight] : na,
+  offset=-rsiOffsetRight,
   title="Regular Bearish Label",
   text="RSI-Div Bear",
   style=shape.labeldown,
@@ -553,9 +653,9 @@ plotshape(
   )
 
 if isNewHour
-    if rsiBullCondAlert
+    if rsi60BullAlertCond
         alert(syminfo.ticker + " RSI-Divergence Bullish", alert.freq_once_per_bar)
-    if rsiBearCondAlert
+    if rsi60BearAlertCond
         alert(syminfo.ticker + " RSI-Divergence Bearish", alert.freq_once_per_bar)
 
 
@@ -699,12 +799,12 @@ if lsob_records.size() > 0
 
             // if entered
             //     fvgShowEnter := true
-            //     fvgShowEnterInfo := getFvgEnterText(lsob)
+            //     fvgShowEnterInfo := fvgGetEnterText(lsob)
             //     fvgSetEnterText(lsob)
 
             // if near
             //     fvgShowNear := true
-            //     fvgShowNearInfo := getFvgEnterText(lsob)
+            //     fvgShowNearInfo := fvgGetEnterText(lsob)
             //     fvgSetEnterText(lsob)
 
             if lsob.wasInvalidated

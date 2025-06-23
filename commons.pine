@@ -19,24 +19,32 @@ proportionPercent(baseValue, propotionValue) =>
 approxEq(value, target, tollerance) =>
     math.abs(value - target) < tollerance
         
-currentHourTime = timestamp("UTC", year, month, dayofmonth, hour, 0)
-isNewHour = currentHourTime != currentHourTime[1]
 
-hourBars = (60 / timeframe.multiplier)
+getConditionalText(condition, txt, prefix) =>
+    condition ? ( prefix + txt ) : ""
 
-getRiskRewardTarget (min, max, rrrTarget) =>
+getNumberText(num) =>
+    num < 1 ? ("0" + str.tostring(num, "#.0")) : str.tostring(num, "#.0")
+    
+    
+getRiskRewardTargetFromSize (min, max, rrrTarget) =>
   sizePercent = (max - min) / min * 100,
   rrrSL = sizePercent / 2 + rrrFees,
   rrrTP = rrrSL * rrrTarget + rrrFees,
-  rrrText = rrrHint ? str.tostring((rrrSL + rrrTP)/rrrSL, "#.0") : "",
+  rrrTargetText = rrrHint ? ("1:" + getNumberText((rrrSL + rrrTP)/rrrSL)) : "",
   percentText = str.tostring(sizePercent, format.percent),
-  [rrrText, percentText]
+  [percentText, rrrTargetText]
+
+getPercentFromSize (min, max) =>
+  sizePercent = (max - min) / min * 100,
+  sizePercent
+
 
 getMaxRatioText (min, max, max_value) =>
   sizePercent = (max - min) / min * 100,
   center = (max - min) / 2,
   maxPercent = math.abs(max_value - center) / min * 100,
   sl = sizePercent / 2,
-  str.tostring((maxPercent + sl), "#.0")
+  "1:" + getNumberText(maxPercent + sl)
   
   

@@ -9,3 +9,5 @@ rsiRangeUpper = input.int(title="RSI Max of Lookback Range", defval=60, display 
 rsiRangeLower = input.int(title="RSI Min of Lookback Range", defval=5, display = display.data_window, group="RSI - Divergence")
 
 
+rsiOffsetLeft = rsiLookbackR * hourBars
+rsiOffsetRight = rsiLookbackR * hourBars

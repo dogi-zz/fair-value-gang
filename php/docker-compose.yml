@@ -1,0 +1,11 @@
+version: '3.3'
+
+services:
+  php:
+    image: php:8.2-apache
+    container_name: php-dev
+    ports:
+      - "8080:80"
+    volumes:
+      - ./src:/var/www/html
+    restart: unless-stopped

@@ -3,38 +3,63 @@
 
 
 
-rsiOsc = ta.rsi(close, rsiLength)
 
-rsiPlFound = na(ta.pivotlow(rsiOsc, rsiLookbackL, rsiLookbackR)) ? false : true
-rsiPhFound = na(ta.pivothigh(rsiOsc, rsiLookbackL, rsiLookbackR)) ? false : true
 
 rsiIsInRange(cond) =>
 	bars = ta.barssince(cond == true)
 	rsiRangeLower <= bars and bars <= rsiRangeUpper
 
-//------------------------------------------------------------------------------
-// Regular Bullish
-// Osc: Higher Low
-rsiInRangePl = rsiIsInRange(rsiPlFound[1])
-oscHL = rsiOsc[rsiLookbackR] > ta.valuewhen(rsiPlFound, rsiOsc[rsiLookbackR], 1) and rsiInRangePl
 
-// Price: Lower Low
-rsiPriceLL = low[rsiLookbackR] < ta.valuewhen(rsiPlFound, low[rsiLookbackR], 1)
-rsiBullCondAlert = rsiPriceLL and oscHL and rsiPlFound
-rsiBullCond = rsiOsc < 30 and rsiBullCondAlert
- 
+rsiDetect() =>
+    rsiOsc = ta.rsi(close, rsiLength)
+
+    // Bullish
+    plFound = na(ta.pivotlow(rsiOsc, rsiLookbackL, rsiLookbackR)) ? false : true
+    inRangePl = rsiIsInRange(plFound[1])
+    oscHL = rsiOsc[rsiLookbackR] > ta.valuewhen(plFound, rsiOsc[rsiLookbackR], 1) and inRangePl
+    // Price: Lower Low
+    rsiPriceLL = low[rsiLookbackR] < ta.valuewhen(plFound, low[rsiLookbackR], 1)
+    bullCondAlert = rsiPriceLL and oscHL and plFound
+    bullAlertCond = rsiOsc < 30 and bullCondAlert
+
+    // Bearish
+    phFound = na(ta.pivothigh(rsiOsc, rsiLookbackL, rsiLookbackR)) ? false : true
+    inRangePh = rsiIsInRange(phFound[1])
+    oscLH = rsiOsc[rsiLookbackR] < ta.valuewhen(phFound, rsiOsc[rsiLookbackR], 1) and inRangePh
+
+    // Price: Higher High
+    rsiPriceHH = high[rsiLookbackR] > ta.valuewhen(phFound, high[rsiLookbackR], 1)
+
+    bearCondAlert = rsiPriceHH and oscLH and phFound
+    bearAlertCond = rsiOsc > 70 and bearCondAlert
+
+
+    [plFound, bullAlertCond, phFound, bearAlertCond]
+
+rsi60PlFound = false
+rsi60BullAlertCond = false
+rsi60PhFound = false
+rsi60BearAlertCond = false
+if isNewHour
+    [_rsi60PlFound, _rsi60BullAlertCond, _rsi60PhFound, _rsi60BearAlertCond] = request.security(syminfo.tickerid, "60", rsiDetect())
+    rsi60PlFound := _rsi60PlFound
+    rsi60BullAlertCond := _rsi60BullAlertCond
+    rsi60PhFound := _rsi60PhFound
+    rsi60BearAlertCond := _rsi60BearAlertCond
+
+// Bullish
 plot(
-  rsiPlFound ? low[rsiLookbackR] : na,
-  offset=-rsiLookbackR,
+  rsi60PlFound ? low[rsiOffsetRight] : na,
+  offset=-rsiOffsetRight,
   title="Regular Bullish",
   linewidth=2,
-  color=(rsiBullCond ? bullCssBorderLight : noneColor),
+  color=(rsi60BullAlertCond ? bullCssBorderLight : noneColor),
   display = display.pane
   )
 
 plotshape(
-  rsiBullCond ? low[rsiLookbackR] : na,
-  offset=-rsiLookbackR,
+  rsi60BullAlertCond ? low[rsiOffsetRight] : na,
+  offset=-rsiOffsetRight,
   title="Regular Bullish Label",
   text="RSI-Div Bull",
   style=shape.labelup,
@@ -43,32 +68,19 @@ plotshape(
   textcolor=textColor
   )
 
-
-//------------------------------------------------------------------------------
-// Regular Bearish
-// Osc: Lower High
-rsiInRangePh = rsiIsInRange(rsiPhFound[1])
-rsiOscLH = rsiOsc[rsiLookbackR] < ta.valuewhen(rsiPhFound, rsiOsc[rsiLookbackR], 1) and rsiInRangePh
-
-// Price: Higher High
-
-rsiPriceHH = high[rsiLookbackR] > ta.valuewhen(rsiPhFound, high[rsiLookbackR], 1)
-
-rsiBearCondAlert = rsiPriceHH and rsiOscLH and rsiPhFound
-rsiBearCond = rsiOsc > 70 and rsiBearCondAlert
-
+ // Bearish
 plot(
-  rsiPhFound ? high[rsiLookbackR] : na,
-  offset=-rsiLookbackR,
+  rsi60PhFound ? high[rsiOffsetRight] : na,
+  offset=-rsiOffsetRight,
   title="Regular Bearish",
   linewidth=2,
-  color=(rsiBearCond ? bearCssBorderLight : noneColor),
+  color=(rsi60BearAlertCond ? bearCssBorderLight : noneColor),
   display = display.pane
   )
 
 plotshape(
-  rsiBearCond ? high[rsiLookbackR] : na,
-  offset=-rsiLookbackR,
+  rsi60BearAlertCond ? high[rsiOffsetRight] : na,
+  offset=-rsiOffsetRight,
   title="Regular Bearish Label",
   text="RSI-Div Bear",
   style=shape.labeldown,
@@ -78,7 +90,7 @@ plotshape(
   )
 
 if isNewHour
-    if rsiBullCondAlert
+    if rsi60BullAlertCond
         alert(syminfo.ticker + " RSI-Divergence Bullish", alert.freq_once_per_bar)
-    if rsiBearCondAlert
+    if rsi60BearAlertCond
         alert(syminfo.ticker + " RSI-Divergence Bearish", alert.freq_once_per_bar)

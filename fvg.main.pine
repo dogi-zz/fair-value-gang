@@ -1,12 +1,14 @@
   
 //-----------------------------------------------------------------------------
-// FVG - detection/display
+// FVG - Detection and display
 //-----------------------------------------------------------------------------
 
 
 var fvg_lastStartTime = 0
-
 var fvg_records = array.new<Fvg>(0)
+
+bool fvgDetected = false
+string fvgDetectedText = ""
 
 if isNewHour
     new_fvg = request.security(syminfo.tickerid, "60", fvgDetect())
@@ -15,11 +17,14 @@ if isNewHour
         new_fvg.startIndex := bar_index - 2 * hourBars
         fvg_lastStartTime := new_fvg.startTime
 
-        info = createFvgFvgInfo(new_fvg)
-        draw = createFvgDraw(new_fvg, info)
+        state = createFvgFvgState(new_fvg)
+        draw = createFvgDraw(new_fvg, state)
 
-        fvg = Fvg.new(new_fvg, draw, info)
+        fvg = Fvg.new(new_fvg, draw, state)
         fvg_records.unshift(fvg)
+
+        fvgDetected := true
+        fvgDetectedText := fvgGetDetectedText(fvg)
 
 //-----------------------------------------------------------------------------
 // FVG - Mitigation Logik
@@ -28,8 +33,8 @@ if isNewHour
 
 bool fvgShowEnter = false
 bool fvgShowNear = false
-string fvgShowEnterInfo = na
-string fvgShowNearInfo = na
+string fvgShowEnterText = na
+string fvgShowNearText = na
 bool fvgShowInvalidated = false
 // 
 // float alarmMin = 0
@@ -41,27 +46,25 @@ if fvg_records.size() > 0
     for i = 0 to fvg_records.size() -1
         fvg = fvg_records.get(i)
 
-        if not fvg.isDead
-            [_fvg, expired, invalidated, entered, near] = fvgPerformStep(fvg)
-            fvg := _fvg
+        if not fvg.state.isDead and (fvgDebugStartTime == 0 or fvg.def.startTime == fvgDebugStartTime)
+            [state, actionInvalidate, actionEntered, actionNear] = fvgPerformStep(fvg)
+            fvg.state := state
 
-            if entered
+            if actionEntered
                 fvgShowEnter := true
-                fvgShowEnterInfo := getFvgEnterText(fvg)
+                fvgShowEnterText := fvgGetEnteredText(fvg)
                 fvgSetEnterText(fvg)
 
-            if near
+            if actionNear
                 fvgShowNear := true
-                fvgShowNearInfo := getFvgEnterText(fvg)
+                fvgShowNearText := fvgGetNearText(fvg)
                 fvgSetEnterText(fvg)
 
-            if invalidated
+            if actionInvalidate
                 fvgShowInvalidated := true
-                fvgSetInvalidated(fvg)
+                fvgDrawSetInvalidated(fvg.draw, fvg.def)
 
-            if expired or invalidated
-                fvg.isDead := true
-            else
+            if not state.isDead
                 box.set_right(fvg.draw.drawBox, bar_index)
                 line.set_x2(fvg.draw.centerLine, bar_index)
                 line.set_x2(fvg.draw.alarmLine, bar_index)
@@ -72,16 +75,14 @@ if fvg_records.size() > 0
     for i = fvg_records.size()-1 to 0
         fvg = fvg_records.get(i)
         if box.get_left(fvg.draw.drawBox) < bar_index - fvgMaxAgeBars
-            box.delete(fvg.draw.drawBox)
-            line.delete(fvg.draw.centerLine)
-            line.delete(fvg.draw.alarmLine)
-            label.delete(fvg.draw.infoLabel)
+            fvgDrawRemove(fvg.draw)
             fvg_records.remove(i)
         
 // 
 // 
 plotshape(fvgShowEnter, style=shape.triangledown, location=location.abovebar, color=color.gray, size=size.tiny)
 plotshape(fvgShowInvalidated, style=shape.xcross, location=location.abovebar, color=color.red, size=size.tiny)
+plotshape(fvgShowNear, style=shape.flag, location=location.abovebar, color=color.lime, size=size.tiny)
 
 
 //-----------------------------------------------------------------------------}
@@ -93,7 +94,9 @@ plotshape(fvgShowInvalidated, style=shape.xcross, location=location.abovebar, co
 //alertcondition(fvgShowInvalidated, 'FVG-invalid', '{{ticker}} FairValueGap invalidated')
 
 if fvgShowEnter
-    alert(syminfo.ticker + "FVG Entered " + fvgShowEnterInfo, alert.freq_once_per_bar)
+    alert(syminfo.ticker + "FVG Entered " + fvgShowEnterText, alert.freq_once_per_bar)
 else if fvgShowNear
-    alert(syminfo.ticker + "FVG Near " + fvgShowNearInfo, alert.freq_once_per_bar)
-   
+    alert(syminfo.ticker + "FVG Near " + fvgShowNearText, alert.freq_once_per_bar)
+else if fvgDetected
+    alert(syminfo.ticker + "FVG detected " + fvgDetectedText, alert.freq_once_per_bar)
+    
