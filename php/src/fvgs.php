@@ -37,8 +37,22 @@ function inhalt()
   echo '</tr></thead>';
   echo '<tbody>';
 
-  foreach (readFvgs() as $fvg) {
-    echo '<tr>';
+  $fvgs = array_values(readFvgs());
+  $fvgCount = count($fvgs);
+
+  for ($i = 0; $i < $fvgCount; $i++) {
+    $fvg = $fvgs[$i];
+
+    $tr_class = '';
+    if ($i > 0 && $fvg['timestamp'] === $fvgs[$i - 1]['timestamp']) {
+        $tr_class .= ($tr_class === '' ? '' : ' ' ). 'same-top';
+    }
+    if ($i < $fvgCount - 1 && $fvg['timestamp'] === $fvgs[$i + 1]['timestamp']) {
+        $tr_class .= ($tr_class === '' ? '' : ' ' ). 'same-bottom';
+    }
+
+
+    echo "<tr class='$tr_class'>";
     echo "<td>" . $fvg['symbol'] . "</td>";
 
     $timestamp = getFromArrayInt($fvg, 'timestamp');
@@ -46,10 +60,10 @@ function inhalt()
     $dir = getFromArray($fvg, 'dir');
     $ratio = getFromArrayFloat($fvg, 'ratio');
     $arrow = '';
-    if ($dir==='bull') {
+    if ($dir === 'bull') {
       $arrow = ' ↗';
     }
-    if ($dir==='bear') {
+    if ($dir === 'bear') {
       $arrow = ' ↘';
     }
 

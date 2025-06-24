@@ -34,13 +34,11 @@ function replaceSymbol(string $input)
 // ----------------------------------------------------------------------------
 
 
-function analyseBracket(string $symbol, string $bracket): bool
+function analyseBracket(string $symbol, string $bracket)
 {
   global $fvgFilePath;
   $doSave = false;
-  $doSkip = true;
-
-  echo ("analyseBracket...\n");
+  $result = null;
 
   $bracketContent = [];
   foreach (explode(",", $bracket) as $part) {
@@ -49,14 +47,18 @@ function analyseBracket(string $symbol, string $bracket): bool
       $bracketContent[$split[0]] = $split[1];
     }
   }
-
-  var_dump($bracketContent);
+  if (array_key_exists('ratio', $bracketContent)) {
+    if (strpos($bracketContent['ratio'], '1:') === 0) {
+      $bracketContent['ratio'] = substr($bracketContent['ratio'], strlen('1:'));
+    }
+  }
 
   $type = getFromArray($bracketContent, 'type');
   $timestamp = getFromArrayInt($bracketContent, 'ts');
+
   // Minimal-Anforderung: [timestamp, type]
   if ($type === null || $timestamp === null) {
-    return true;
+    return null;
   }
 
   $entry = [
@@ -71,7 +73,7 @@ function analyseBracket(string $symbol, string $bracket): bool
     $entry['size'] = getFromArrayFloat($bracketContent, 'size');
     if ($entry['size'] !== null) {
       $doSave = true;
-      $doSkip = true;
+      $result = false;
     }
   }
 
@@ -81,6 +83,7 @@ function analyseBracket(string $symbol, string $bracket): bool
     $entry['ratio'] = getFromArrayFloat($bracketContent, 'ratio');
     if ($entry['size'] !== null && $entry['ratio'] !== null) {
       $doSave = true;
+      $result = "$symbol FVG ENTER size:" . $entry['size'] . " ratio:" . $entry['ratio'];
     }
   }
 
@@ -90,15 +93,15 @@ function analyseBracket(string $symbol, string $bracket): bool
     $entry['ratio'] = getFromArrayFloat($bracketContent, 'ratio');
     if ($entry['size'] !== null && $entry['ratio'] !== null) {
       $doSave = true;
+      $result = "$symbol FVG near size:" . $entry['size'] . " ratio:" . $entry['ratio'];
     }
   }
 
   if ($type === 'FVG-INVALIDATED') {
     $entry['type'] = 'INVALIDATED';
     $doSave = true;
-    $doSkip = true;
+    $result = false;
   }
-
 
   if ($doSave) {
     // Zwei Wochen in Millisekunden
@@ -120,7 +123,7 @@ function analyseBracket(string $symbol, string $bracket): bool
     writeLines($fvgFilePath, $newLines);
   }
 
-  return !$doSkip;
+  return $result;
 }
 
 function analyseAlarm(string $input)
@@ -146,11 +149,14 @@ function analyseAlarm(string $input)
 
   // Inhalt extrahieren
   $bracketContent = substr($input, $tagStart + 1, $tagEnd - $tagStart - 1);
-  $sendToAll = analyseBracket($symbol, $bracketContent);
-  if (!$sendToAll) {
+  $analyseBracketResult = analyseBracket($symbol, $bracketContent);
+  if ($analyseBracketResult === false) {
     return null;
   }
   $trimmedText = trim(substr($input, 0, $tagStart));
+  if (is_string($analyseBracketResult)) {
+    $trimmedText = $analyseBracketResult;
+  }
 
   // Gekürzten Text zurückgeben
   return replaceSymbol($trimmedText);
