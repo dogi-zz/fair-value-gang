@@ -5,6 +5,7 @@ require_once 'common-helpers.php';
 $fvgFilePath = 'fvgs.txt';
 $alarmLogPath = 'alarmlog.txt';
 $alarmLogLimit = 1000;
+$limitRatio = 3.0;
 
 // ----------------------------------------------------------------------------
 
@@ -36,7 +37,7 @@ function replaceSymbol(string $input)
 
 function analyseBracket(string $symbol, string $bracket)
 {
-  global $fvgFilePath;
+  global $fvgFilePath, $limitRatio;
   $doSave = false;
   $result = null;
 
@@ -83,7 +84,11 @@ function analyseBracket(string $symbol, string $bracket)
     $entry['ratio'] = getFromArrayFloat($bracketContent, 'ratio');
     if ($entry['size'] !== null && $entry['ratio'] !== null) {
       $doSave = true;
-      $result = "$symbol FVG ENTER size:" . $entry['size'] . " ratio:" . $entry['ratio'];
+      if ($entry['ratio'] < $limitRatio) {
+        $result = false;
+      } else {
+        $result = "$symbol FVG ENTER size:" . $entry['size'] . " ratio:" . $entry['ratio'];
+      }
     }
   }
 
@@ -93,7 +98,11 @@ function analyseBracket(string $symbol, string $bracket)
     $entry['ratio'] = getFromArrayFloat($bracketContent, 'ratio');
     if ($entry['size'] !== null && $entry['ratio'] !== null) {
       $doSave = true;
-      $result = "$symbol FVG near size:" . $entry['size'] . " ratio:" . $entry['ratio'];
+      if ($entry['ratio'] < $limitRatio) {
+        $result = false;
+      } else {
+        $result = "$symbol FVG near size:" . $entry['size'] . " ratio:" . $entry['ratio'];
+      }
     }
   }
 
@@ -132,7 +141,7 @@ function analyseAlarm(string $input)
 
   // Alarm ins Log eintargen
   $logLines = readLinesOrEmpty($alarmLogPath);
-  array_unshift($logLines, $input);
+  array_unshift($logLines, date('c') . ' ' . $input);
   if (count($logLines) > $alarmLogLimit) {
     $logLines = array_slice($logLines, 0, $alarmLogLimit);
   }
