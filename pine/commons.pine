@@ -1,0 +1,53 @@
+
+float debugLabelOffset = low
+
+debugLabel(float offset, string debugText) =>
+    label.new(bar_index, offset, debugText, size=size.small, color=color.silver, textcolor=color.white, style=label.style_label_upper_left)
+    offset - 0.01
+
+isBull(int offset = 0) =>
+  close[offset] > open[offset]
+
+isBear(int offset = 0) =>
+  close[offset] < open[offset]
+
+bodySize(int offset = 0) =>
+    math.abs(close[offset] - open[offset])
+
+valueToPercent(float value, int index = 0) =>
+    value / open[index] * 100.
+
+proportionPercent(float baseValue, float propotionValue) =>
+    propotionValue / baseValue * 100.
+    
+approxEq(float value, float target, float tollerance) =>
+    math.abs(value - target) < tollerance
+        
+
+getConditionalText(bool condition, string txt, string prefix) =>
+    condition ? ( prefix + txt ) : ""
+
+getNumberText(num) =>
+    num < 1 ? ("0" + str.tostring(num, "#.0")) : str.tostring(num, "#.0")
+    
+
+getPercentTextFromSize (float min, float max) =>
+  sizePercent = (max - min) / min * 100,
+  str.tostring(sizePercent, format.percent),
+
+getPercentFromSize (float min, float max) =>
+  sizePercent = (max - min) / min * 100,
+  sizePercent
+
+
+getMaxRatio (float min, float max, float max_value) =>
+  sizePercent = (max - min) / min * 100,
+  center = (max - min) / 2,
+  maxPercent = math.abs(max_value - center) / min * 100,
+  sl = sizePercent / 2,
+  maxPercent + sl
+
+getMaxRatioText (float min, float max, float max_value) =>
+  "1:" + str.tostring(getMaxRatio(min, max, max_value))
+  
+  

@@ -1,0 +1,125 @@
+
+lsobMaxAgeBars = lsobMaxAge * hourBars
+
+lsobBgColorActive = color.new(color.silver, 50)
+lsobBgColorInactive = color.new(color.silver, 90)
+
+lsobDebug = false
+
+type LsobDefinition 
+    string prefix
+    bool  isBull
+    float min
+    float max
+    float startValue
+    int   startTime  // auto
+    int   startIndex = na // manual
+
+createLsobDefinition (string prefix, bool isBull, float min, float max, float startValue) => 
+    LsobDefinition.new(prefix, isBull, min, max,  na, time[2], na)
+    
+type LsobDraw
+    box   drawBox
+    label infoLabel
+
+type LsobState
+    string phase = 'pending'
+    bool toDelete = false
+    //bool isDelete = false
+    //bool wasInvalidated = false
+createLsobState () => 
+    LsobState.new('pending', false)
+
+type Lsob
+    LsobDefinition def
+    LsobDraw draw
+    LsobState state
+
+lsobGetName(LsobDefinition def) =>
+    name = def.isBull ? "LSOB (bull)" : "LSOB (bear)"
+    result = def.prefix + " " + name
+    if lsobDebug
+        result := result + " (" + str.tostring(def.startIndex)+")"
+    result
+
+
+createLsobDraw (LsobDefinition lsob) => 
+    height = lsob.max - lsob.min
+    center_line_level = lsob.min + height * 0.5
+
+    colorBg = color.silver // lsob.isBull ? bullCss : bearCss
+
+    b = box.new(lsob.startIndex, lsob.max, bar_index, lsob.min, border_color = colorBg, bgcolor=lsobBgColorInactive)
+    infoLabelText = lsobGetName(lsob)
+    infoLabelStyle = lsob.isBull ? label.style_label_upper_left :  label.style_label_lower_left
+    infoLabelY  = lsob.isBull ? lsob.min : lsob.max
+    infoLabel = label.new(lsob.startIndex, infoLabelY, infoLabelText, size=size.small, color=color.silver, textcolor=color.white, style=infoLabelStyle)
+
+    LsobDraw.new(b, infoLabel)
+
+removeLsobDraw (LsobDraw draw) => 
+    box.delete(draw.drawBox)
+    label.delete(draw.infoLabel)
+
+activateLsobDraw (LsobDraw draw) => 
+    box.set_bgcolor(draw.drawBox, lsobBgColorActive)
+
+touchLsobDraw (LsobDefinition def, touchText) => 
+    infoLabelStyle = def.isBull ? label.style_label_upper_left :  label.style_label_lower_left
+    infoLabelY  = def.isBull ? low : high
+    infoLabeTxt = touchText
+    infoLabel = label.new(bar_index, infoLabelY, infoLabeTxt, size=size.small, color=color.silver, textcolor=color.white, style=infoLabelStyle)
+
+mitigateLsobDraw (LsobDraw draw) => 
+    box.set_right(draw.drawBox, bar_index)
+
+lsobGetTochedText(Lsob lsob) =>
+    result = lsobGetName(lsob.def) + " Touched"
+    result
+
+lsobGetLeaved(Lsob lsob) =>
+    lsob.def.isBull ? (low > lsob.def.max) : (high < lsob.def.min)
+    
+lsobGetImpaled(Lsob lsob) =>
+    lsob.def.isBull ? (low < lsob.def.min) : (high > lsob.def.max)
+    
+lsobGetTouched(Lsob lsob) =>
+    lsob.def.isBull ? (low < lsob.def.max) : (high > lsob.def.min)
+
+lsobDetect(prefix) =>
+    highest = ta.highest(lsobCheckDistance)
+    lowest = ta.lowest(lsobCheckDistance)
+    isBull = low == lowest
+    isBear = high == highest
+    LsobDefinition new_lsob = na
+    if isBull
+        new_lsob := createLsobDefinition(prefix, true, low, high, open[2])
+    if isBear
+        new_lsob := createLsobDefinition(prefix, false, low, high, open[2])
+    new_lsob
+
+lsobCheckInBar(Lsob lsob) =>
+    LsobState state = lsob.state
+    string action = ""
+    if not state.toDelete
+        expired = (bar_index - lsob.def.startIndex) > lsobMaxAgeBars
+        impaled = lsobGetImpaled(lsob)
+        if expired
+            action := "kill"
+            state.toDelete := true
+        else if impaled
+            // state.phase := 'closed'
+            // action := "close"
+            action := "kill"
+            state.toDelete := true
+        else if state.phase != 'closed'
+            if state.phase != 'leaved'
+                if lsobGetLeaved(lsob)
+                    state.phase := 'leaved'
+                    action := "activated"
+            else if state.phase != 'closed'
+                if lsobGetTouched(lsob)
+                    state.phase := 'closed'
+                    action := "touch"
+    [state, action]
+ 

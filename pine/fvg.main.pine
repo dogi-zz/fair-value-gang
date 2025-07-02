@@ -17,7 +17,7 @@ if isNewHour
         new_fvg.startIndex := bar_index - 2 * hourBars
         fvg_lastStartTime := new_fvg.startTime
 
-        state = createFvgFvgState(new_fvg)
+        state = createFvgState(new_fvg)
         draw = createFvgDraw(new_fvg, state)
 
         fvg = Fvg.new(new_fvg, draw, state)

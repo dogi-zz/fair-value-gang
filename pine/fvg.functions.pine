@@ -1,3 +1,4 @@
+fvgMaxAgeBars = fvgMaxAge * hourBars
 
 fvgDebug = false
 fvgDebugStartTime = 0
@@ -43,9 +44,9 @@ type FvgState
     float  max_value = 0.0
     bool isDead = false
 
-createFvgFvgState(FvgDefinition fvg) => 
-    [percentText, rrrTargetText] = getRiskRewardTargetFromSize(fvg.min, fvg.max, fvgRrrTarget)
-    label = percentText + getConditionalText(rrrHint, rrrTargetText, " ") + getConditionalText(fvgDebug, str.tostring(fvg.startTime), " ")
+createFvgState(FvgDefinition fvg) => 
+    percentText = getPercentTextFromSize(fvg.min, fvg.max)
+    label = percentText + getConditionalText(fvgDebug, str.tostring(fvg.startTime), " ")
     FvgState.new()
     
 //-----------------------------------------------------------------------------
@@ -143,8 +144,8 @@ fvgGetNear(Fvg fvg) =>
      
 
 fvgSetEnterText(Fvg fvg) =>
-    [percentText, rrrTargetText] = getRiskRewardTargetFromSize(fvg.def.min, fvg.def.max, fvgRrrTarget)
-    new_text = percentText + " " + getMaxRatioText(fvg.def.min, fvg.def.max, fvg.state.max_value) + getConditionalText(rrrHint, rrrTargetText, " ")
+    percentText = getPercentTextFromSize(fvg.def.min, fvg.def.max)
+    new_text = percentText + " " + getMaxRatioText(fvg.def.min, fvg.def.max, fvg.state.max_value)
     label.set_text(fvg.draw.infoLabel, new_text + getConditionalText(fvgDebug, str.tostring(fvg.def.startTime), " "))
   
 fvgGetDetectedText(Fvg fvg) => 

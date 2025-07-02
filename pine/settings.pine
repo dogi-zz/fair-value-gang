@@ -4,13 +4,6 @@ isNewHour = currentHourTime != currentHourTime[1]
 hourBars = (60 / timeframe.multiplier)
 
 
-//IMPORT fvg.settings.pine
-//IMPORT lsob.settings.pine
-//IMPORT side-by-side.settings.pine
-//IMPORT rsi-div.settings.pine
-
-
-
 // =============== COMMONS ===============
 
 bullBase = input.color(#089981, "Bullish Color", group="Styles")

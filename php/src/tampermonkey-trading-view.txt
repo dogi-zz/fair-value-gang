@@ -1,0 +1,547 @@
+// ==UserScript==
+// @name         TradingView Hotkeys
+// @namespace    http://tampermonkey.net/
+// @version      2025-04-10
+// @author       Dogan Cinbir
+// @description  try to take over the world!
+// @match        https://de.tradingview.com/chart/*
+// @icon         https://static.tradingview.com/static/images/favicon.ico
+// @grant        none
+// ==/UserScript==
+
+
+(function() {
+'use strict';
+  const init = ()=>{
+     console.info("Hello from Bitunix Helper!");
+// inc/styles.ts
+var STYLE_INFO_LINE = {
+  "position": "fixed",
+  "bottom": "0",
+  "right": "5px",
+  "background": "rgba(255,2555,255,0.5)",
+  "padding": "1px 2px",
+  "zIndex": "100",
+  "pointerEvents": "none",
+  "font-size": "10px"
+};
+
+// inc/input-helper.ts
+var HotKey = class {
+  /**
+   * @param keyCode der KeyCode wie er in dem Event steht
+   * @param name der Anzeigename
+   * @param action die Aktion die Ausfeührt wird. Das ist eine funktion mit den Parametern: (event, next) und "next" ist eine Funktion in der man Folgekommandos
+   */
+  constructor(keyCode, name, action) {
+    this.keyCode = keyCode;
+    this.name = name;
+    this.action = action;
+  }
+  getDescription() {
+    let keyCode = this.keyCode;
+    if (keyCode.startsWith("Key")) {
+      keyCode = keyCode.substring("Key".length);
+    }
+    if (keyCode.startsWith("Digit")) {
+      keyCode = keyCode.substring("Digit".length);
+    }
+    return `[${keyCode}: ${this.name}]`;
+  }
+};
+var HotKeyManager = class {
+  constructor(show, hide) {
+    this.show = show;
+    this.hide = hide;
+    this.hotKeys = {};
+    this.subKeys = {};
+    this.show = show;
+    this.hide = hide;
+    this.hotKeys = {};
+    this.subKeys = null;
+    document.addEventListener("keyup", (e) => {
+      if (!this.subKeys) {
+        this.hide("Strg-Alt");
+      }
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.code === "Escape") {
+        this.subKeys = null;
+        this.hide("Shift-Alt");
+      }
+      const next = (subKeys) => {
+        if (subKeys.length) {
+          this.subKeys = {};
+          subKeys.forEach((subKey) => this.subKeys[subKey.keyCode] = subKey);
+        }
+        this.show(this.getHints());
+      };
+      if (this.subKeys?.[e.code]) {
+        e.stopImmediatePropagation();
+        e.preventDefault();
+        this.subKeys[e.code].action(e, next);
+        this.subKeys = null;
+        this.hide("Strg-Alt");
+      }
+      if (!e.ctrlKey && e.shiftKey && e.altKey) {
+        this.show(this.getHints());
+        if (this.hotKeys[e.code]) {
+          e.stopImmediatePropagation();
+          e.preventDefault();
+          this.hotKeys[e.code].action(e, next);
+        }
+      }
+    });
+    this.hide("Strg-Shift");
+  }
+  addKey(hotKey) {
+    this.hotKeys[hotKey.keyCode] = hotKey;
+  }
+  getHints() {
+    return Object.values(this.subKeys || this.hotKeys).map((action) => action.getDescription());
+  }
+};
+
+// inc/tm-query.ts
+var TmQuery = class _TmQuery {
+  constructor(parentElement) {
+    this.elements = parentElement instanceof _TmQuery ? [...parentElement.elements] : Array.isArray(parentElement) ? parentElement : [parentElement || document.body];
+  }
+  queryChildren(query) {
+    const result = [];
+    this.elements.forEach((element) => {
+      _TmQuery.nodeListToArray(element.childNodes).forEach((node) => {
+        if (!query || _TmQuery.elementMatches(node, query)) {
+          result.push(node);
+        }
+      });
+    });
+    return new _TmQuery(result);
+  }
+  queryContent(query) {
+    const parts = _TmQuery.queryStringToParts(query);
+    const result = _TmQuery.findAllByParts(this.elements, parts);
+    return new _TmQuery(result);
+  }
+  filter(query) {
+    const result = this.elements.filter((e) => _TmQuery.elementMatches(e, query));
+    return new _TmQuery(result);
+  }
+  get length() {
+    return this.elements.length;
+  }
+  findSingle(query) {
+    return this.queryContent(query).elements[0];
+  }
+  asSingle() {
+    if (this.elements.length > 1) {
+      console.info(this.elements);
+      throw new Error("More tah one element!");
+    }
+    return this.elements[0];
+  }
+  asArray() {
+    return this.elements;
+  }
+  forEach(callback) {
+    this.elements.forEach(callback);
+  }
+  find(predicate) {
+    return this.elements.find(predicate);
+  }
+  static queryStringToParts(query) {
+    const queryParts = [];
+    let actualPart = "";
+    let quoteString = null;
+    for (let i = 0; i < query.length; i++) {
+      const char = query[i];
+      if (quoteString) {
+        actualPart += char;
+        if (char === "\\") {
+          i++;
+          actualPart += query[i];
+        } else if (char === quoteString) {
+          quoteString = null;
+        }
+      } else if (char.match(/\s/)) {
+        if (actualPart.length) {
+          queryParts.push(actualPart);
+        }
+        actualPart = "";
+      } else if (char === "'" || char === '"') {
+        actualPart += char;
+        quoteString = char;
+      } else {
+        actualPart += char;
+      }
+    }
+    if (actualPart.length) {
+      queryParts.push(actualPart);
+    }
+    return queryParts;
+  }
+  static findAllByParts(elements, parts) {
+    const result = [];
+    if (parts.length) {
+      const queryPart = parts.shift();
+      elements.forEach((element) => _TmQuery.findInElement(element, queryPart).forEach((r) => result.push(r)));
+    }
+    if (parts.length) {
+      return _TmQuery.findAllByParts(result, parts);
+    } else {
+      return result;
+    }
+  }
+  static nodeListToArray(source) {
+    const result = [];
+    for (let i = 0; i < source.length; i++) {
+      result.push(source[i]);
+    }
+    return result;
+  }
+  static tokenListToArray(source) {
+    const result = [];
+    for (let i = 0; i < source.length; i++) {
+      result.push(source[i]);
+    }
+    return result;
+  }
+  static findInElement(element, queryString) {
+    const result = [];
+    if (queryString.endsWith("*")) {
+      return _TmQuery.nodeListToArray(element.querySelectorAll("*")).filter((e) => _TmQuery.elementMatches(e, queryString));
+    } else {
+      element.querySelectorAll(queryString).forEach((r) => result.push(r));
+    }
+    return result;
+  }
+  static elementMatches(element, queryString) {
+    if (queryString.endsWith("*")) {
+      if (queryString.startsWith(".")) {
+        const prefix = queryString.substring(1, queryString.length - 1);
+        return _TmQuery.tokenListToArray(element.classList).some((cls) => cls.startsWith(prefix));
+      }
+      if (queryString.startsWith("#")) {
+        const prefix = queryString.substring(1, queryString.length - 1);
+        return element.getAttribute("id").startsWith(prefix);
+      }
+      throw new Error(`Query "${queryString}" not implemented.`);
+    } else {
+      return element.matches(queryString);
+    }
+  }
+  static firstChild(element, queryString) {
+    if (!element) {
+      return null;
+    }
+    for (const e of _TmQuery.nodeListToArray(element.childNodes)) {
+      if (_TmQuery.elementMatches(e, queryString)) {
+        return e;
+      }
+    }
+    return null;
+  }
+  static getAsElement(element) {
+    return element instanceof _TmQuery ? element.asSingle() : element;
+  }
+};
+window.TmQuery = TmQuery;
+
+// inc/tm-dom.ts
+var TmDomElement = class _TmDomElement {
+  constructor(type, innerText) {
+    this.type = type;
+    this.element = document.createElement(type);
+    this.display = "";
+    if (innerText) {
+      this.element.innerText = innerText;
+    }
+  }
+  get() {
+    return this.element;
+  }
+  css(css) {
+    _TmDomElement.setCss(this.element, css);
+    return this;
+  }
+  attr(attrs) {
+    _TmDomElement.setAttr(this.element, attrs);
+    return this;
+  }
+  appendTo(_parent) {
+    const parent = _parent instanceof _TmDomElement ? _parent.element : _parent;
+    parent.append(this.element);
+    return this;
+  }
+  prependTo(_parent) {
+    const parent = _parent instanceof _TmDomElement ? _parent.element : _parent;
+    parent.prepend(this.element);
+    return this;
+  }
+  setInnerText(text) {
+    this.element.innerText = text;
+    return this;
+  }
+  setDisplayForHide(display) {
+    this.display = display;
+    return this;
+  }
+  setVisible(visible) {
+    if (visible) {
+      this.show();
+    } else {
+      this.hide();
+    }
+    return this;
+  }
+  show() {
+    this.element.style.display = this.display;
+    return this;
+  }
+  hide() {
+    this.element.style.display = this.display;
+    return this;
+  }
+  addTransition(transitionString) {
+    if (this.element.style.transition?.length > 0) {
+      this.element.style.transition = `${this.element.style.transition}, ${transitionString}`;
+    } else {
+      this.element.style.transition = transitionString;
+    }
+  }
+  createHoverEffect(hoverCss) {
+    const hoverOriginal = {};
+    Object.keys(hoverCss).forEach((key) => hoverOriginal[key] = this.element.style[key]);
+    this.element.addEventListener("mouseenter", () => {
+      _TmDomElement.setCss(this.element, hoverCss);
+    });
+    this.element.addEventListener("mouseleave", () => {
+      _TmDomElement.setCss(this.element, hoverOriginal);
+    });
+  }
+  static createAt(parent, type, css) {
+    const element = document.createElement(type);
+    parent.append(element);
+    if (css) {
+      _TmDomElement.setCss(element, css);
+    }
+    return element;
+  }
+  static setCss(element, css) {
+    Object.entries(css).forEach(([key, value]) => {
+      element.style[key] = value;
+    });
+  }
+  static setAttr(element, css) {
+    Object.entries(css).forEach(([key, value]) => {
+      element.setAttribute(key, value);
+    });
+  }
+};
+var TmDom = class _TmDom {
+  static extendExisting(selectItems, itemCheck, itemModify, interval) {
+    (selectItems() || []).forEach((item) => {
+      if (!itemCheck(item)) {
+        itemModify(item);
+      }
+    });
+    if (interval) {
+      setTimeout(() => _TmDom.extendExisting(selectItems, itemCheck, itemModify, interval), interval);
+    }
+  }
+  static getAsElement(element) {
+    return element instanceof TmDomElement ? element.get() : TmQuery.getAsElement(element);
+  }
+  static click(_element) {
+    const element = _TmDom.getAsElement(_element);
+    element.click();
+  }
+  static checkBoxIsChecked(_element) {
+    const element = _TmDom.getAsElement(_element);
+    return element.checked;
+  }
+  static checkBoxSetChecked(_element, value) {
+    const element = _TmDom.getAsElement(_element);
+    element.checked = value;
+    element.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+  static checkBoxToggleChecked(_element) {
+    const element = _TmDom.getAsElement(_element);
+    element.checked = !element.checked;
+    element.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+  static getValue(_element) {
+    const element = _TmDom.getAsElement(_element);
+    return element.value;
+  }
+  static setValue(_element, value) {
+    const element = _TmDom.getAsElement(_element);
+    element.value = value;
+    element.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+};
+
+// inc/action-helper.ts
+var TmAction = class {
+  static rightClick(element) {
+    element.dispatchEvent(new MouseEvent("contextmenu", {
+      bubbles: true,
+      cancelable: true,
+      view: window
+    }));
+  }
+  static hoverElement(element) {
+    element.dispatchEvent(new MouseEvent("mouseover", {
+      bubbles: true,
+      cancelable: true,
+      view: window
+    }));
+  }
+  static poniterDown(element) {
+    element.dispatchEvent(new PointerEvent("pointerdown", {
+      bubbles: true,
+      cancelable: true,
+      pointerType: "mouse"
+    }));
+  }
+  static wait(time) {
+    return new Promise((res) => setTimeout(res, time));
+  }
+  static waitFor(callback) {
+    return new Promise(async (res) => {
+      let result = await callback();
+      while (!result) {
+        await this.wait(10);
+        result = await callback();
+      }
+      res(result);
+    });
+  }
+};
+var delay = (time) => TmAction.wait(time);
+
+// src/trading-view.ts
+var DEFAULT_TEXT = "Powered by Dogan Cinbir";
+var myHints = new TmDomElement("div").css(STYLE_INFO_LINE).css({ right: "", left: "10px" });
+myHints.setDisplayForHide("block");
+myHints.setInnerText(DEFAULT_TEXT);
+myHints.appendTo(document.body);
+var convertClickableActionToHotkeys = (clickableActions) => {
+  //! Maximalanzahl ist 9 weil es es auf die Zifferntasten gemappt wird
+  const size = Math.min(9, clickableActions.length);
+  if (!size) {
+    return;
+  }
+  //! Bereite die Folgeatktionen vor
+  const nextKeyActions = [];
+  for (let i = 0; i < size; i++) {
+    const a = clickableActions[i];
+    nextKeyActions.push(new HotKey(`Digit${a.num}`, a.name, () => a.el.click()));
+  }
+};
+var findMenuItemByLabel = (menuItems, labelString) => {
+  let result = null;
+  menuItems.forEach((menuItem, i) => {
+    const label = new TmQuery(menuItem.closest("tr")).queryContent('[data-label="true"]');
+    if (label.asSingle().innerText === labelString) {
+      result = menuItem.closest("tr");
+    }
+  });
+  return result;
+};
+//! HIER GEHTS LOS
+var hotKeyManager = new HotKeyManager(
+  (hints) => myHints.setInnerText(hints.join(" ")),
+  (hint) => myHints.setInnerText(`${DEFAULT_TEXT} (${hint})`)
+);
+//! Strg-Shift-A
+//! Die Quick Tools aus der Leiste
+hotKeyManager.addKey(new HotKey("KeyA", "Toolbar", (e, next) => {
+  //! Sammle die Infos zu den Buttons
+  //! Es hat sich herausgestellt, das alles mit span[data-name] die Quik-Buttons sind
+  const clickableActions = [];
+  const toolbarActions = new TmQuery().queryContent(".tv-floating-toolbar span[data-name]");
+  if (!toolbarActions.length) {
+    return;
+  }
+  toolbarActions.forEach((el, i) => {
+    clickableActions.push({
+      num: i + 1,
+      name: el.getAttribute("data-name").substring("FavoriteToolbarLineTool".length),
+      el
+    });
+  });
+  //! Konvertiere zu Hotkeys
+  const nextKeyActions = convertClickableActionToHotkeys(clickableActions);
+  //! Aktiviere die Folgeaktionen
+  next(nextKeyActions);
+}));
+//! Strg-Shift-Q
+//! Designvorlagen auswählen
+hotKeyManager.addKey(new HotKey("KeyQ", "Designvorlagen", async (e, next) => {
+  //! Öffne das "Designvorlagen" Menü
+  const templateMenuButton = new TmQuery().queryContent('.tv-floating-toolbar [data-role="button"][data-name="templates"]');
+  if (!templateMenuButton.length) {
+    return;
+  }
+  TmDom.click(templateMenuButton);
+  await delay(100);
+  //! Sammle die Infos zu den Vorlagen
+  const clickableActions = [];
+  const menuItems = new TmQuery().queryContent('.menuWrap-* tr[data-role="menuitem"] span[data-name="remove-button"]');
+  menuItems.forEach((menuItem, i) => {
+    const parent = menuItem.parentElement.parentElement;
+    clickableActions.push({
+      num: i + 1,
+      name: new TmQuery(parent).queryContent('[data-label="true"]').asSingle().innerText,
+      el: parent
+    });
+  });
+  //! Konvertiere zu Hotkeys
+  const nextKeyActions = convertClickableActionToHotkeys(clickableActions);
+  //! Aktiviere die Folgeaktionen
+  next(nextKeyActions);
+}));
+//! Strg-Shift-!
+//! Sichtbarkeit eines Elements setzten
+hotKeyManager.addKey(new HotKey("KeyW", "Visibility", async (e, next) => {
+  //! Hier die Eigenliche Logik für ein Menupunkt mit der Beschreibung "label"
+  const performVisibility = async (label) => {
+    //! Suche und Clicke auf das Dreipunkte Menu
+    const moreButton = new TmQuery().queryContent('.tv-floating-toolbar [data-name="more"]');
+    TmDom.click(moreButton);
+    await delay(100);
+    //! Hovere über den Menüpunkt Sichtbarkeit der Intervalle
+    const menuItems = new TmQuery().queryContent('.menuWrap-* tr[data-role="menuitem"] .arrowIcon-*');
+    let visibilityIcon = findMenuItemByLabel(menuItems, "Sichtbarkeit der Intervalle");
+    if (!visibilityIcon) {
+      return;
+    }
+    TmAction.hoverElement(visibilityIcon);
+    await delay(100);
+    //! Suche den richrigen Menüpunkt
+    const subMenuItems = new TmQuery().queryContent('.menuWrap-* tr[data-role="menuitem"]');
+    //! Klicke auf ihn
+    let submenuItem = findMenuItemByLabel(subMenuItems, label);
+    TmDom.click(submenuItem);
+  };
+  next([
+    new HotKey("Digit1", "Alle", async (e2) => {
+      performVisibility("Alle Intervalle");
+    }),
+    new HotKey("Digit2", "Dar\xFCber", async (e2) => {
+      performVisibility("Aktueller Intervall und dar\xFCber");
+    }),
+    new HotKey("Digit3", "Darunter", async (e2) => {
+      performVisibility("Aktueller Intervall und darunter");
+    })
+  ]);
+}));
+
+  };
+  if (document.readyState === "loading") {
+     window.addEventListener("load", init);
+  } else {
+     init();
+  }
+})();

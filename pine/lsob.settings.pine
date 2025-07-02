@@ -1,5 +1,5 @@
 
-losbShow = input.bool(false, "LSOB-Anzeigen", group="LSOB Einstellungen")
+losbShow = input.bool(true, "LSOB-Anzeigen", group="LSOB Einstellungen")
 
 lsobCheckDistance = input.int(5, "LSOB-Check distance", group="LSOB Einstellungen")
 lsobMaxAge = input.int(72, "LSOB-Maximum Age in Hours", group="LSOB Einstellungen")

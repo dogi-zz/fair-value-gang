@@ -46,7 +46,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     <a class="main-link" href="fvgs.php">FVG-Liste</a>
     <a class="main-link" href="https://raw.githubusercontent.com/dogi-zz/fair-value-gang/main/_result_">Pine Skript Anzeigen</a>
-    <a class="main-link" href="tampermonkey.php">Tampermonkey-Bitunix</a>
+    <a class="main-link" href="tampermonkey.php">Tampermonkey</a>
 
     <?php
   }

@@ -1,0 +1,41 @@
+
+bool lsobTouched = false
+string lsobDetectedText = na
+
+// LSOBS Überprüfen
+if lsob_records.size() > 0
+    for i = lsob_records.size()-1 to 0
+        lsob = lsob_records.get(i)
+
+        [state, action] = lsobCheckInBar(lsob)
+
+        if action == "close"
+            age = bar_index - lsob.def.startIndex
+            if age < 2
+                state.toDelete := true
+            // debugLabelOffset := debugLabel(debugLabelOffset, str.tostring(lsob.def.startIndex) + (state.toDelete ? " kill" : " close"))
+        else if action == "activated"
+            activateLsobDraw(lsob.draw)
+        else if action == "touch"
+            lsobTouched := true
+            lsobDetectedText := lsobGetTochedText(lsob)
+            if lsobDebug
+                touchLsobDraw(lsob.def, lsobDetectedText)
+
+        if action == "touch" or state.phase != 'closed'
+            mitigateLsobDraw(lsob.draw)
+
+        lsob.state := state
+        lsob_records.set(i, lsob)
+
+
+if lsob_records.size() > 0
+    for i = lsob_records.size()-1 to 0
+        lsob = lsob_records.get(i)
+        //debugLabelOffset := debugLabel(debugLabelOffset, str.tostring(lsob.state.toDelete)+" "+str.tostring(lsob.def.startIndex))
+        if lsob.state.toDelete
+            removeLsobDraw(lsob.draw)
+            lsob_records.remove(i)
+
+if lsobTouched
+    alert(syminfo.ticker + lsobDetectedText, alert.freq_once_per_bar)

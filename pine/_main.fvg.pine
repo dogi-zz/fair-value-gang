@@ -33,6 +33,10 @@ indicator("Fair Value Gangster", "FV-Gang", overlay = true, max_lines_count = 50
 //Settings
 //-----------------------------------------------------------------------------
 
+//IMPORT fvg.settings.pine
+//IMPORT lsob.settings.pine
+//IMPORT side-by-side.settings.pine
+//IMPORT rsi-div.settings.pine
 //IMPORT settings.pine
 
 
@@ -48,4 +52,5 @@ indicator("Fair Value Gangster", "FV-Gang", overlay = true, max_lines_count = 50
 //IMPORT emas.pine
 
 //IMPORT lsob.functions.pine
+//IMPORT lsob.detect.pine
 //IMPORT lsob.main.pine

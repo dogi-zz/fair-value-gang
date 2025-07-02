@@ -1,8 +1,8 @@
 
 // =============== RSI-DIVERGENCE FUNCTIONALITY ===============
 
-
-
+rsiOffsetLeft = rsiLookbackR * hourBars
+rsiOffsetRight = rsiLookbackR * hourBars
 
 
 rsiIsInRange(cond) =>
