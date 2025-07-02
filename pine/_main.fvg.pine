@@ -54,3 +54,7 @@ indicator("Fair Value Gangster", "FV-Gang", overlay = true, max_lines_count = 50
 //IMPORT lsob.functions.pine
 //IMPORT lsob.detect.pine
 //IMPORT lsob.main.pine
+
+
+//IMPORT vwap.pine
+

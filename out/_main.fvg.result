@@ -859,3 +859,37 @@ if lsob_records.size() > 0
 if lsobTouched
     alert(syminfo.ticker + lsobDetectedText, alert.freq_once_per_bar)
 
+
+
+// ... vwap.pine
+
+
+VWAP_GROUP = "VWAP Settings"
+CALC_MODE_TOOLTIP = "Determines the units used to calculate the distance of the bands. When 'Percentage' is selected, a multiplier of 1 means 1%."
+vwapCalcMode = input.string("Standard Deviation", "Bands Calculation Mode", options = ["Standard Deviation", "Percentage"], group = VWAP_GROUP, tooltip = CALC_MODE_TOOLTIP, display = display.data_window)
+
+vwapSrc = hlc3
+vwapCumVolume = ta.cum(volume)
+if barstate.islast and vwapCumVolume == 0
+    runtime.error("No volume is provided by the data vendor.")
+
+
+vwapWeekIsNewPeriod = timeframe.change("W")
+vwapMonthIsNewPeriod = timeframe.change("M")
+
+if na(vwapSrc[1])
+	vwapWeekIsNewPeriod := true
+
+float vwapWeekValue = na
+float vwapMonthValue = na
+
+if not timeframe.isdwm
+    [_vwap_w, _stdevUpper_w, _w] = ta.vwap(vwapSrc, vwapWeekIsNewPeriod, 1)
+	vwapWeekValue := _vwap_w
+    [_vwap_m, _stdevUpper_m, _m] = ta.vwap(vwapSrc, vwapMonthIsNewPeriod, 1)
+	vwapMonthValue := _vwap_m
+
+plot(vwapWeekValue, title = "VWAP-Week", color = color.silver, style = plot.style_circles, linewidth = 1)
+plot(vwapMonthValue, title = "VWAP-Month", color = color.silver, style = plot.style_circles, linewidth = 2)
+
+
