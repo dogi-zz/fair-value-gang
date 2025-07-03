@@ -14,5 +14,5 @@ indicator("FV-Lsob", "FV-Lsob", overlay = true, max_lines_count = 500, max_boxes
 
 
 //IMPORT lsob.functions.pine
-//IMPORT lsob.detect.pine
-//IMPORT lsob.main.pine
+//IMPORT lsob.main-scalp.pine
+//IMPORT lsob.main-check.pine

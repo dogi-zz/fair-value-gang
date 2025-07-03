@@ -4,19 +4,18 @@ lsobMaxAgeBars = lsobMaxAge * hourBars
 lsobBgColorActive = color.new(color.silver, 50)
 lsobBgColorInactive = color.new(color.silver, 90)
 
-lsobDebug = false
+lsobDebug = true
 
 type LsobDefinition 
     string prefix
     bool  isBull
     float min
     float max
-    float startValue
     int   startTime  // auto
     int   startIndex = na // manual
 
-createLsobDefinition (string prefix, bool isBull, float min, float max, float startValue) => 
-    LsobDefinition.new(prefix, isBull, min, max,  na, time[2], na)
+createLsobDefinition (string prefix, bool isBull, float min, float max) => 
+    LsobDefinition.new(prefix, isBull, min, max, time[2], na)
     
 type LsobDraw
     box   drawBox
@@ -93,9 +92,9 @@ lsobDetect(prefix) =>
     isBear = high == highest
     LsobDefinition new_lsob = na
     if isBull
-        new_lsob := createLsobDefinition(prefix, true, low, high, open[2])
+        new_lsob := createLsobDefinition(prefix, true, low, high)
     if isBear
-        new_lsob := createLsobDefinition(prefix, false, low, high, open[2])
+        new_lsob := createLsobDefinition(prefix, false, low, high)
     new_lsob
 
 lsobCheckInBar(Lsob lsob) =>
@@ -108,8 +107,6 @@ lsobCheckInBar(Lsob lsob) =>
             action := "kill"
             state.toDelete := true
         else if impaled
-            // state.phase := 'closed'
-            // action := "close"
             action := "kill"
             state.toDelete := true
         else if state.phase != 'closed'

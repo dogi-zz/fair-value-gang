@@ -1,0 +1,18 @@
+//@version=6
+indicator("FV-Lsob", "FV-Lsob", overlay = true, max_lines_count = 500, max_boxes_count = 500)
+ 
+
+
+//------------------------------------------------------------------------------
+//Settings
+//-----------------------------------------------------------------------------
+
+//IMPORT lsob.settings.pine
+//IMPORT settings.pine
+
+//IMPORT commons.pine
+
+
+//IMPORT lsob.functions.pine
+//IMPORT lsob.main.pine
+//IMPORT lsob.main-check.pine

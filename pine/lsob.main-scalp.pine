@@ -1,0 +1,33 @@
+
+lsobScalpCheckDistance = input.int(10, "LSOB-Check distance (SCALP)", group="LSOB Einstellungen")
+
+var lsob_records = array.new<Lsob>(0)
+
+
+if losbShow
+    LsobDefinition new_lsob = na
+
+    highest = ta.highest(lsobScalpCheckDistance)
+    lowest = ta.lowest(lsobScalpCheckDistance)
+    isBull = low[3] == lowest
+    isBear = high[3] == highest
+    if isBull
+        if isBull(2) and isBull(1) and open > high[3]
+            new_lsob := createLsobDefinition('#', true, low[3], high[3])
+    if isBear
+        if isBear(2) and isBear(1) and open < low[3]
+            new_lsob := createLsobDefinition('#', false, low[3], high[3])
+
+    if not na(new_lsob)
+        new_lsob.startIndex := bar_index - 3
+
+        lsob = Lsob.new(new_lsob, createLsobDraw(new_lsob), createLsobState())
+        lsob_records.unshift(lsob)
+  
+ 
+        // DEBUG
+        //debugText = (new_lsob.isBull?'u ':'d ') + str.tostring(new_lsob.min)+"-"+str.tostring(new_lsob.max) + " " + str.tostring(new_lsob.startIndex)
+        //debugLabelOffset := debugLabel(debugLabelOffset, debugText)
+
+//debugLabelOffset := debugLabel(debugLabelOffset, str.tostring(lsob_records.size()))
+//debugLabelOffset := debugLabel(debugLabelOffset, str.tostring(bar_index))

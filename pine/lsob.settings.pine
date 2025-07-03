@@ -1,8 +1,8 @@
 
 losbShow = input.bool(true, "LSOB-Anzeigen", group="LSOB Einstellungen")
 
-lsobCheckDistance = input.int(5, "LSOB-Check distance", group="LSOB Einstellungen")
-lsobMaxAge = input.int(72, "LSOB-Maximum Age in Hours", group="LSOB Einstellungen")
+lsobCheckDistance = input.int(72, "LSOB-Check distance", group="LSOB Einstellungen")
+lsobMaxAge = input.int(168, "LSOB-Maximum Age in Hours", group="LSOB Einstellungen")
 lsobTouchThreshold = input.float(0.1, "LSOB-Touch Threshold", minval=0.0, maxval=1, step=0.01, group="LSOB Einstellungen")
 
 

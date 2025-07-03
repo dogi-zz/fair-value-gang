@@ -1,0 +1,298 @@
+//@version=6
+indicator("FV-Lsob", "FV-Lsob", overlay = true, max_lines_count = 500, max_boxes_count = 500)
+ 
+
+
+//------------------------------------------------------------------------------
+//Settings
+//-----------------------------------------------------------------------------
+
+// ... lsob.settings.pine
+
+losbShow = input.bool(true, "LSOB-Anzeigen", group="LSOB Einstellungen")
+
+lsobCheckDistance = input.int(72, "LSOB-Check distance", group="LSOB Einstellungen")
+lsobMaxAge = input.int(168, "LSOB-Maximum Age in Hours", group="LSOB Einstellungen")
+lsobTouchThreshold = input.float(0.1, "LSOB-Touch Threshold", minval=0.0, maxval=1, step=0.01, group="LSOB Einstellungen")
+
+
+
+// ... settings.pine
+
+currentHourTime = timestamp("UTC", year, month, dayofmonth, hour, 0)
+isNewHour = timeframe.change("60")
+isNew4Hour = timeframe.change("240")
+hourBars = (60 / timeframe.multiplier)
+
+
+// =============== COMMONS ===============
+
+bullBase = input.color(#089981, "Bullish Color", group="Styles")
+bearBase = input.color(#f23645, "Bearish Color", group="Styles")
+
+bullCss        = color.new(bullBase, 70)
+bearCss        = color.new(bearBase, 70)
+bullCssBorder  = color.new(bullBase, 50)
+bearCssBorder  = color.new(bearBase, 50)
+
+bullCssLight   = color.new(bullBase, 95)
+bearCssLight   = color.new(bearBase, 95)
+bullCssBorderLight   = color.new(bullBase, 90)
+bearCssBorderLight   = color.new(bearBase, 90)
+
+textColor = input.color(color.white, "Text Color", group="Styles")
+noneColor = color.new(color.white, 100)
+
+
+// ... commons.pine
+
+float debugLabelOffset = low
+
+debugLabel(float offset, string debugText) =>
+    label.new(bar_index, offset, debugText, size=size.small, color=color.silver, textcolor=color.white, style=label.style_label_upper_left)
+    offset - 0.01
+
+isBull(int offset = 0) =>
+  close[offset] > open[offset]
+
+isBear(int offset = 0) =>
+  close[offset] < open[offset]
+
+bodySize(int offset = 0) =>
+    math.abs(close[offset] - open[offset])
+
+valueToPercent(float value, int index = 0) =>
+    value / open[index] * 100.
+
+proportionPercent(float baseValue, float propotionValue) =>
+    propotionValue / baseValue * 100.
+    
+approxEq(float value, float target, float tollerance) =>
+    math.abs(value - target) < tollerance
+        
+
+getConditionalText(bool condition, string txt, string prefix) =>
+    condition ? ( prefix + txt ) : ""
+
+getNumberText(num) =>
+    num < 1 ? ("0" + str.tostring(num, "#.0")) : str.tostring(num, "#.0")
+    
+
+getPercentTextFromSize (float min, float max) =>
+  sizePercent = (max - min) / min * 100,
+  str.tostring(sizePercent, format.percent),
+
+getPercentFromSize (float min, float max) =>
+  sizePercent = (max - min) / min * 100,
+  sizePercent
+
+
+getMaxRatio (float min, float max, float max_value) =>
+  sizePercent = (max - min) / min * 100,
+  center = (max - min) / 2,
+  maxPercent = math.abs(max_value - center) / min * 100,
+  sl = sizePercent / 2,
+  maxPercent + sl
+
+getMaxRatioText (float min, float max, float max_value) =>
+  "1:" + str.tostring(getMaxRatio(min, max, max_value))
+  
+  
+
+
+// ... lsob.functions.pine
+
+lsobMaxAgeBars = lsobMaxAge * hourBars
+
+lsobBgColorActive = color.new(color.silver, 50)
+lsobBgColorInactive = color.new(color.silver, 90)
+
+lsobDebug = true
+
+type LsobDefinition 
+    string prefix
+    bool  isBull
+    float min
+    float max
+    int   startTime  // auto
+    int   startIndex = na // manual
+
+createLsobDefinition (string prefix, bool isBull, float min, float max) => 
+    LsobDefinition.new(prefix, isBull, min, max, time[2], na)
+    
+type LsobDraw
+    box   drawBox
+    label infoLabel
+
+type LsobState
+    string phase = 'pending'
+    bool toDelete = false
+    //bool isDelete = false
+    //bool wasInvalidated = false
+createLsobState () => 
+    LsobState.new('pending', false)
+
+type Lsob
+    LsobDefinition def
+    LsobDraw draw
+    LsobState state
+
+lsobGetName(LsobDefinition def) =>
+    name = def.isBull ? "LSOB (bull)" : "LSOB (bear)"
+    result = def.prefix + " " + name
+    if lsobDebug
+        result := result + " (" + str.tostring(def.startIndex)+")"
+    result
+
+
+createLsobDraw (LsobDefinition lsob) => 
+    height = lsob.max - lsob.min
+    center_line_level = lsob.min + height * 0.5
+
+    colorBg = color.silver // lsob.isBull ? bullCss : bearCss
+
+    b = box.new(lsob.startIndex, lsob.max, bar_index, lsob.min, border_color = colorBg, bgcolor=lsobBgColorInactive)
+    infoLabelText = lsobGetName(lsob)
+    infoLabelStyle = lsob.isBull ? label.style_label_upper_left :  label.style_label_lower_left
+    infoLabelY  = lsob.isBull ? lsob.min : lsob.max
+    infoLabel = label.new(lsob.startIndex, infoLabelY, infoLabelText, size=size.small, color=color.silver, textcolor=color.white, style=infoLabelStyle)
+
+    LsobDraw.new(b, infoLabel)
+
+removeLsobDraw (LsobDraw draw) => 
+    box.delete(draw.drawBox)
+    label.delete(draw.infoLabel)
+
+activateLsobDraw (LsobDraw draw) => 
+    box.set_bgcolor(draw.drawBox, lsobBgColorActive)
+
+touchLsobDraw (LsobDefinition def, touchText) => 
+    infoLabelStyle = def.isBull ? label.style_label_upper_left :  label.style_label_lower_left
+    infoLabelY  = def.isBull ? low : high
+    infoLabeTxt = touchText
+    infoLabel = label.new(bar_index, infoLabelY, infoLabeTxt, size=size.small, color=color.silver, textcolor=color.white, style=infoLabelStyle)
+
+mitigateLsobDraw (LsobDraw draw) => 
+    box.set_right(draw.drawBox, bar_index)
+
+lsobGetTochedText(Lsob lsob) =>
+    result = lsobGetName(lsob.def) + " Touched"
+    result
+
+lsobGetLeaved(Lsob lsob) =>
+    lsob.def.isBull ? (low > lsob.def.max) : (high < lsob.def.min)
+    
+lsobGetImpaled(Lsob lsob) =>
+    lsob.def.isBull ? (low < lsob.def.min) : (high > lsob.def.max)
+    
+lsobGetTouched(Lsob lsob) =>
+    lsob.def.isBull ? (low < lsob.def.max) : (high > lsob.def.min)
+
+lsobDetect(prefix) =>
+    highest = ta.highest(lsobCheckDistance)
+    lowest = ta.lowest(lsobCheckDistance)
+    isBull = low == lowest
+    isBear = high == highest
+    LsobDefinition new_lsob = na
+    if isBull
+        new_lsob := createLsobDefinition(prefix, true, low, high)
+    if isBear
+        new_lsob := createLsobDefinition(prefix, false, low, high)
+    new_lsob
+
+lsobCheckInBar(Lsob lsob) =>
+    LsobState state = lsob.state
+    string action = ""
+    if not state.toDelete
+        expired = (bar_index - lsob.def.startIndex) > lsobMaxAgeBars
+        impaled = lsobGetImpaled(lsob)
+        if expired
+            action := "kill"
+            state.toDelete := true
+        else if impaled
+            action := "kill"
+            state.toDelete := true
+        else if state.phase != 'closed'
+            if state.phase != 'leaved'
+                if lsobGetLeaved(lsob)
+                    state.phase := 'leaved'
+                    action := "activated"
+            else if state.phase != 'closed'
+                if lsobGetTouched(lsob)
+                    state.phase := 'closed'
+                    action := "touch"
+    [state, action]
+ 
+// ... lsob.main-scalp.pine
+
+lsobScalpCheckDistance = input.int(10, "LSOB-Check distance (SCALP)", group="LSOB Einstellungen")
+
+var lsob_records = array.new<Lsob>(0)
+
+
+if losbShow
+    LsobDefinition new_lsob = na
+
+    highest = ta.highest(lsobScalpCheckDistance)
+    lowest = ta.lowest(lsobScalpCheckDistance)
+    isBull = low[3] == lowest
+    isBear = high[3] == highest
+    if isBull
+        if isBull(2) and isBull(1) and open > high[3]
+            new_lsob := createLsobDefinition('#', true, low[3], high[3])
+    if isBear
+        if isBear(2) and isBear(1) and open < low[3]
+            new_lsob := createLsobDefinition('#', false, low[3], high[3])
+
+    if not na(new_lsob)
+        new_lsob.startIndex := bar_index - 3
+
+        lsob = Lsob.new(new_lsob, createLsobDraw(new_lsob), createLsobState())
+        lsob_records.unshift(lsob)
+  
+ 
+        // DEBUG
+        //debugText = (new_lsob.isBull?'u ':'d ') + str.tostring(new_lsob.min)+"-"+str.tostring(new_lsob.max) + " " + str.tostring(new_lsob.startIndex)
+        //debugLabelOffset := debugLabel(debugLabelOffset, debugText)
+
+//debugLabelOffset := debugLabel(debugLabelOffset, str.tostring(lsob_records.size()))
+//debugLabelOffset := debugLabel(debugLabelOffset, str.tostring(bar_index))
+
+// ... lsob.main-check.pine
+
+bool lsobTouched = false
+string lsobDetectedText = na
+
+// LSOBS Überprüfen
+if lsob_records.size() > 0
+    for i = lsob_records.size()-1 to 0
+        lsob = lsob_records.get(i)
+
+        [state, action] = lsobCheckInBar(lsob)
+
+        if action == "activated"
+            activateLsobDraw(lsob.draw)
+        else if action == "touch"
+            lsobTouched := true
+            lsobDetectedText := lsobGetTochedText(lsob)
+            if lsobDebug
+                touchLsobDraw(lsob.def, lsobDetectedText)
+
+        if action == "touch" or state.phase != 'closed'
+            mitigateLsobDraw(lsob.draw)
+
+        lsob.state := state
+        lsob_records.set(i, lsob)
+
+
+if lsob_records.size() > 0
+    for i = lsob_records.size()-1 to 0
+        lsob = lsob_records.get(i)
+        //debugLabelOffset := debugLabel(debugLabelOffset, str.tostring(lsob.state.toDelete)+" "+str.tostring(lsob.def.startIndex))
+        if lsob.state.toDelete
+            removeLsobDraw(lsob.draw)
+            lsob_records.remove(i)
+
+if lsobTouched
+    alert(syminfo.ticker + lsobDetectedText, alert.freq_once_per_bar)
+
