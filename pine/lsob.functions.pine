@@ -1,11 +1,6 @@
 
 lsobMaxAgeBars = lsobMaxAge * hourBars
 
-lsobBgColorActive = color.new(color.silver, 50)
-lsobBgColorInactive = color.new(color.silver, 90)
-
-lsobDebug = true
-
 type LsobDefinition 
     string prefix
     bool  isBull
@@ -19,6 +14,8 @@ createLsobDefinition (string prefix, bool isBull, float min, float max) =>
     
 type LsobDraw
     box   drawBox
+    line  topLine
+    line  bottomLine
     label infoLabel
 
 type LsobState
@@ -46,31 +43,36 @@ createLsobDraw (LsobDefinition lsob) =>
     height = lsob.max - lsob.min
     center_line_level = lsob.min + height * 0.5
 
-    colorBg = color.silver // lsob.isBull ? bullCss : bearCss
+    colorLabel = lsob.isBull ? bullCssBorder : bearCssBorder
+    colorBorder = lsob.isBull ? bullCssBorderLight : bearCssBorderLight
 
-    b = box.new(lsob.startIndex, lsob.max, bar_index, lsob.min, border_color = colorBg, bgcolor=lsobBgColorInactive)
+    b = box.new(lsob.startIndex, lsob.max, bar_index, lsob.min, border_color=trasparent, bgcolor=trasparent)
+    topLine = line.new(lsob.startIndex, lsob.max, bar_index, lsob.max, color=colorBorder, style=line.style_dotted, xloc=xloc.bar_index)
+    bottomLine = line.new(lsob.startIndex, lsob.min, bar_index, lsob.min, color=colorBorder, style=line.style_dotted, xloc=xloc.bar_index)
     infoLabelText = lsobGetName(lsob)
     infoLabelStyle = lsob.isBull ? label.style_label_upper_left :  label.style_label_lower_left
     infoLabelY  = lsob.isBull ? lsob.min : lsob.max
-    infoLabel = label.new(lsob.startIndex, infoLabelY, infoLabelText, size=size.small, color=color.silver, textcolor=color.white, style=infoLabelStyle)
+    infoLabel = label.new(lsob.startIndex, infoLabelY, infoLabelText, size=size.small, color=colorLabel, textcolor=textColor, style=infoLabelStyle)
 
-    LsobDraw.new(b, infoLabel)
+    LsobDraw.new(b, topLine, bottomLine, infoLabel)
 
 removeLsobDraw (LsobDraw draw) => 
     box.delete(draw.drawBox)
     label.delete(draw.infoLabel)
+    line.delete(draw.topLine)
+    line.delete(draw.bottomLine)
 
-activateLsobDraw (LsobDraw draw) => 
-    box.set_bgcolor(draw.drawBox, lsobBgColorActive)
-
-touchLsobDraw (LsobDefinition def, touchText) => 
-    infoLabelStyle = def.isBull ? label.style_label_upper_left :  label.style_label_lower_left
-    infoLabelY  = def.isBull ? low : high
-    infoLabeTxt = touchText
-    infoLabel = label.new(bar_index, infoLabelY, infoLabeTxt, size=size.small, color=color.silver, textcolor=color.white, style=infoLabelStyle)
+activateLsobDraw (LsobDefinition def, LsobDraw draw) => 
+    colorBg = def.isBull ? bullCss : bearCss
+    colorBorder = def.isBull ? bullCssBorder : bearCssBorder
+    box.set_bgcolor(draw.drawBox, colorBg)
+    line.set_color(draw.topLine, colorBorder)
+    line.set_color(draw.bottomLine, colorBorder)
 
 mitigateLsobDraw (LsobDraw draw) => 
     box.set_right(draw.drawBox, bar_index)
+    line.set_x2(draw.topLine, bar_index)
+    line.set_x2(draw.bottomLine, bar_index)
 
 lsobGetTochedText(Lsob lsob) =>
     result = lsobGetName(lsob.def) + " Touched"

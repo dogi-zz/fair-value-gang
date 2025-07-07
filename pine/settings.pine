@@ -7,16 +7,18 @@ hourBars = (60 / timeframe.multiplier)
 
 // =============== COMMONS ===============
 
-bullBase = input.color(#089981, "Bullish Color", group="Styles")
-bearBase = input.color(#f23645, "Bearish Color", group="Styles")
+alarmLabels = input.bool(true, "Alarm-Labels", group="Debug")
+
+bullBase = input.color(#f4d03f, "Bullish Color", group="Styles")
+bearBase = input.color(#d5dbdb, "Bearish Color", group="Styles")
 
 bullCss        = color.new(bullBase, 70)
 bearCss        = color.new(bearBase, 70)
 bullCssBorder  = color.new(bullBase, 50)
 bearCssBorder  = color.new(bearBase, 50)
 
-bullCssLight   = color.new(bullBase, 95)
-bearCssLight   = color.new(bearBase, 95)
+bullCssLight   = color.new(bullBase, 80)
+bearCssLight   = color.new(bearBase, 80)
 bullCssBorderLight   = color.new(bullBase, 90)
 bearCssBorderLight   = color.new(bearBase, 90)
 

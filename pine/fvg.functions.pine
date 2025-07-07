@@ -1,6 +1,5 @@
 fvgMaxAgeBars = fvgMaxAge * hourBars
 
-fvgDebug = false
 fvgDebugStartTime = 0
 fvgAtrHour = request.security(syminfo.tickerid, "60", ta.atr(fvgAtrLength))
 
@@ -47,7 +46,7 @@ type FvgState
 createFvgState(FvgDefinition fvg) => 
     percentText = getPercentTextFromSize(fvg.min, fvg.max)
     label = percentText + getConditionalText(fvgDebug, str.tostring(fvg.startTime), " ")
-    FvgState.new()
+    FvgState.new(label)
     
 //-----------------------------------------------------------------------------
 
@@ -65,7 +64,7 @@ createFvgDraw (FvgDefinition fvg, FvgState state) =>
     colorBg = fvg.isBull ? bullCss : bearCss
     colorLine = fvg.isBull ? bullCssBorder : bearCssBorder
 
-    b = box.new(fvg.startIndex, fvg.max, bar_index, fvg.min, bgcolor = colorBg, border_color = colorLine)
+    b = box.new(fvg.startIndex, fvg.max, bar_index, fvg.min, bgcolor=colorBg, border_color = colorLine)
     l1 = line.new(x1=fvg.startIndex, y1=center_line_level, x2=bar_index, y2=center_line_level, color=color.gray, style=line.style_dotted, xloc=xloc.bar_index)
     l2 = line.new(x1=fvg.startIndex, y1=fvg.alarmLevel, x2=bar_index, y2=fvg.alarmLevel, color=colorLine, style=line.style_dotted, xloc=xloc.bar_index)
     infoLabel = label.new(fvg.startIndex+1, center_line_level, state.label, size=size.small, color=colorLine, textcolor=textColor, style=label.style_label_left)
@@ -79,6 +78,11 @@ fvgDrawSetInvalidated(FvgDraw draw, FvgDefinition def) =>
     else 
         box.set_bgcolor(draw.drawBox, bearCssLight)
         box.set_border_color(draw.drawBox, bearCssBorderLight)
+
+fvgDrawMitigate (FvgDraw draw) => 
+    box.set_right(draw.drawBox, bar_index)
+    line.set_x2(draw.centerLine, bar_index)
+    line.set_x2(draw.alarmLine, bar_index)
 
 fvgDrawRemove(FvgDraw draw) =>
     box.delete(draw.drawBox)
@@ -192,32 +196,32 @@ fvgGetInvalidatedText(Fvg fvg) =>
     tagContent := tagContent + "," + "type:"+"FVG-INVALIDATED"
     "size:"+sizePercentText+"["+tagContent+"]"
         
-fvgPerformStep(Fvg fvg) =>
-    actionInvalidate = false
-    actionEntered = false
-    actionNear = false
-    expired = (bar_index - fvg.def.startIndex) > fvgMaxAgeBars
-    state = fvg.state
-    if not expired and not fvg.state.was_invalidated
-        state.max_value := math.max(state.max_value, fvgGetMaxValue(fvg))
-        if fvgGetImpaled(fvg)
-            state.was_invalidated := true
-            actionInvalidate := true
+fvgCheckInBar(Fvg fvg) =>
+    FvgState state = fvg.state
+    string action = ""
+    if not state.isDead
+        expired = (bar_index - fvg.def.startIndex) > fvgMaxAgeBars
+        if expired
+            action := "kill"
             state.isDead := true
-        else if not state.was_invalidate_enter and fvgGetEntered(fvg, fvgTouchThreshold)
-            state.was_invalidate_enter := true
-        else if isNewHour and state.was_invalidate_enter and fvgGetCloseOutside(fvg)
-            state.was_invalidated := true
-            actionInvalidate := true
-            state.isDead := true
-        
-        if not state.was_entered and fvgGetEntered(fvg, 0.)
-            state.was_entered := true
-            actionEntered := true
-        else if not state.was_near and fvgGetNear(fvg)
-            state.was_near := true
-            actionNear := true
-    else
-        state.isDead := true
-    [state, actionInvalidate, actionEntered, actionNear]
+        else
+            state.max_value := math.max(state.max_value, fvgGetMaxValue(fvg))
+            if fvgGetImpaled(fvg)
+                action := "invalidate"
+                state.was_invalidated := true
+                state.isDead := true
+            else if fvgGetEntered(fvg, fvgTouchThreshold)
+                state.was_invalidate_enter := true
+            else if not state.was_entered and fvgGetEntered(fvg, 0.)
+                state.was_entered := true
+                action := "entered"
+            else if not state.was_near and fvgGetNear(fvg)
+                state.was_near := true
+                action := "near"
+
+            if isNewHour and state.was_invalidate_enter and fvgGetCloseOutside(fvg)
+                action := "invalidate"
+                state.was_invalidated := true
+                state.isDead := true
+    [state, action]
 

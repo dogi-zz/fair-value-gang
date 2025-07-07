@@ -1,5 +1,6 @@
 
 float debugLabelOffset = low
+color trasparent = color.new(color.white, 100)
 
 debugLabel(float offset, string debugText) =>
     label.new(bar_index, offset, debugText, size=size.small, color=color.silver, textcolor=color.white, style=label.style_label_upper_left)
@@ -50,4 +51,9 @@ getMaxRatio (float min, float max, float max_value) =>
 getMaxRatioText (float min, float max, float max_value) =>
   "1:" + str.tostring(getMaxRatio(min, max, max_value))
   
-  
+
+showAlarm (string alarmText, string pos, bool condition = true) => 
+    if alarmLabels and condition
+        infoLabelStyle = pos == "bottom" ? label.style_label_up :  label.style_label_down
+        infoLabelY  = pos == "bottom" ? low : high
+        infoLabel = label.new(bar_index, infoLabelY, alarmText, size=size.small, color=color.red, textcolor=color.white, style=infoLabelStyle)

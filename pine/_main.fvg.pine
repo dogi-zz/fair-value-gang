@@ -1,60 +1,40 @@
 //@version=6
-indicator("Fair Value Gangster", "FV-Gang", overlay = true, max_lines_count = 500, max_boxes_count = 500)
+indicator("Fair Value Gangster", "FV-Gang", overlay=true, max_lines_count=500, max_boxes_count=200)
 
-
-/// Features
-/// 
-/// == Fair Value Gaps ==
-/// 
-/// Erkennung der Gaps im 1h Timeframe
-/// 
-/// -- Detected Alarm:
-///    (Immer zur vollen Stunde)
-///    - Mit der Info wie groß sie ist
-///    - Bei angenommen 0.04% gebühren (bissl mehr als in Echt) wie hoch müsste man das RRR einstellen um auf 1:3 zu kommen
-/// -- Enter Alarm:
-///    - Mit den Infos von "Detected"
-///    - plus dem möglichen Ratio (ohne Gebühr) zum Maximum das in der Zwischenzeit gesehen wurde
-/// 
-/// == RSI-Divergenz ==
-///    
-/// Übernimmt den Alarm aus dem "RSI-Divergence Indicator"
-///    
-/// Es wird nur die Divergenz angezeigt, für details den Original Indkator dazunehmen
-///    
-/// == EMAS ==
-///    
-/// Plottet den 20er 50er und 200er EMA
-/// 
-
+//DEFINE: FVG:true
+//DEFINE: LSOB:true
+//DEFINE: RSI:true
+//DEFINE: HINTS:true
+//DEFINE: SBS:true
+//DEFINE: LIGRAP:true
 
 
 //------------------------------------------------------------------------------
 //Settings
 //-----------------------------------------------------------------------------
 
-//IMPORT fvg.settings.pine
-//IMPORT lsob.settings.pine
-//IMPORT side-by-side.settings.pine
-//IMPORT rsi-div.settings.pine
+//IMPORT IF(FVG) fvg.settings.pine
+//IMPORT IF(LSOB) lsob.settings.pine
+//IMPORT IF(SBS) side-by-side.settings.pine
+//IMPORT IF(RSI) rsi-div.settings.pine
+//IMPORT IF(LIGRAP) liqui-grap.settings.pine
 //IMPORT settings.pine
 
 
 //IMPORT commons.pine
 
-//IMPORT fvg.functions.pine
-//IMPORT fvg.main.pine
-
-//IMPORT side-by-side.pine
-
-//IMPORT rsi-div.main.pine
-
-//IMPORT emas.pine
-
-//IMPORT lsob.functions.pine
-//IMPORT lsob.main.pine
-//IMPORT lsob.main-check.pine
+//IMPORT IF(FVG) fvg.functions.pine
+//IMPORT IF(FVG) fvg.main.pine
 
 
-//IMPORT vwap.pine
+//IMPORT IF(LSOB) lsob.functions.pine
+//IMPORT IF(LSOB) lsob.main.pine
+//IMPORT IF(LSOB) lsob.main-check.pine
+
+//IMPORT IF(SBS) side-by-side.pine
+//IMPORT IF(RSI) rsi-div.main.pine
+//IMPORT IF(LIGRAP) liqui-grap.main.pine
+
+//IMPORT IF(HINTS) emas.pine
+//IMPORT IF(HINTS) vwap.pine
 

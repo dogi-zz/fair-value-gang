@@ -7,23 +7,25 @@ var lsob_1h_lastStartTime = 0
 if losbShow and isNewHour
     new_lsob = request.security(syminfo.tickerid, "60", lsobDetect("1h"))
 
-    if not na(new_lsob) and new_lsob.startTime != lsob_1h_lastStartTime
-        new_lsob.startIndex := bar_index
-        lsob_1h_lastStartTime := new_lsob.startTime
+    if not na(new_lsob)
+        if new_lsob.startTime != lsob_1h_lastStartTime
+            new_lsob.startIndex := bar_index
+            lsob_1h_lastStartTime := new_lsob.startTime
 
-        lsob = Lsob.new(new_lsob, createLsobDraw(new_lsob), createLsobState())
-        lsob_records.unshift(lsob)
+            lsob = Lsob.new(new_lsob, createLsobDraw(new_lsob), createLsobState())
+            lsob_records.unshift(lsob)
  
 var lsob_4h_lastStartTime = 0
 if losbShow and isNew4Hour
     new_lsob = request.security(syminfo.tickerid, "240", lsobDetect("4h"))
 
-    if not na(new_lsob) and new_lsob.startTime != lsob_4h_lastStartTime 
-        new_lsob.startIndex := bar_index
-        lsob_4h_lastStartTime := new_lsob.startTime
+    if not na(new_lsob)
+        if new_lsob.startTime != lsob_4h_lastStartTime 
+            new_lsob.startIndex := bar_index
+            lsob_4h_lastStartTime := new_lsob.startTime
 
-        lsob = Lsob.new(new_lsob, createLsobDraw(new_lsob), createLsobState())
-        lsob_records.unshift(lsob)
+            lsob = Lsob.new(new_lsob, createLsobDraw(new_lsob), createLsobState())
+            lsob_records.unshift(lsob)
  
         // DEBUG
         // debugText = (new_lsob.isBull?'u ':'d ') + str.tostring(new_lsob.min)+"-"+str.tostring(new_lsob.max) + " " + str.tostring(new_lsob.startIndex)

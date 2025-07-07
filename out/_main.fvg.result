@@ -1,32 +1,12 @@
 //@version=6
-indicator("Fair Value Gangster", "FV-Gang", overlay = true, max_lines_count = 500, max_boxes_count = 500)
+indicator("Fair Value Gangster", "FV-Gang", overlay=true, max_lines_count=500, max_boxes_count=200)
 
-
-/// Features
-/// 
-/// == Fair Value Gaps ==
-/// 
-/// Erkennung der Gaps im 1h Timeframe
-/// 
-/// -- Detected Alarm:
-///    (Immer zur vollen Stunde)
-///    - Mit der Info wie groß sie ist
-///    - Bei angenommen 0.04% gebühren (bissl mehr als in Echt) wie hoch müsste man das RRR einstellen um auf 1:3 zu kommen
-/// -- Enter Alarm:
-///    - Mit den Infos von "Detected"
-///    - plus dem möglichen Ratio (ohne Gebühr) zum Maximum das in der Zwischenzeit gesehen wurde
-/// 
-/// == RSI-Divergenz ==
-///    
-/// Übernimmt den Alarm aus dem "RSI-Divergence Indicator"
-///    
-/// Es wird nur die Divergenz angezeigt, für details den Original Indkator dazunehmen
-///    
-/// == EMAS ==
-///    
-/// Plottet den 20er 50er und 200er EMA
-/// 
-
+//DEFINE: FVG:true
+//DEFINE: LSOB:true
+//DEFINE: RSI:true
+//DEFINE: HINTS:true
+//DEFINE: SBS:true
+//DEFINE: LIGRAP:true
 
 
 //------------------------------------------------------------------------------
@@ -49,14 +29,19 @@ fvgPercentThreshold = input.float(0.5, "FVG-Percent-Threshold", minval=0.0, step
 rrrHint = input.bool(true, "RiskReward Hint", group="FVG Risk/Reward")
 fvgRrrTarget = input.float(3, "Desired Range", minval=0.0, step=0.1, group="FVG Risk/Reward")
 
+fvgAlarmLabels = input.bool(false, "FVG-Alarm-Labels", group="FVG Einstellungen")
+
+fvgDebug = input.bool(false, "LFVGSOB-Debug", group="FVG Einstellungen")
+
 // ... lsob.settings.pine
 
 losbShow = input.bool(true, "LSOB-Anzeigen", group="LSOB Einstellungen")
 
-lsobCheckDistance = input.int(72, "LSOB-Check distance", group="LSOB Einstellungen")
+lsobCheckDistance = input.int(20, "LSOB-Check distance", group="LSOB Einstellungen")
 lsobMaxAge = input.int(168, "LSOB-Maximum Age in Hours", group="LSOB Einstellungen")
 lsobTouchThreshold = input.float(0.1, "LSOB-Touch Threshold", minval=0.0, maxval=1, step=0.01, group="LSOB Einstellungen")
 
+lsobDebug = input.bool(false, "LSOB-Debug", group="LSOB Einstellungen")
 
 
 // ... side-by-side.settings.pine
@@ -87,6 +72,15 @@ rsiRangeLower = input.int(title="RSI Min of Lookback Range", defval=5, display =
 
 
 
+// ... liqui-grap.settings.pine
+
+
+// =============== RSI-DIVERGENCE SETTINGS ===============
+
+liquiGrapDepth = input.int(12, 'Depth', minval=1, step=1, group="ZigZag Config")
+liquiGrapDeviation = input.int(2, 'Deviation', minval=1, step=1, group="ZigZag Config")
+liquiGrapBackstep = input.int(5, 'Backstep', minval=2, step=1, group="ZigZag Config")
+
 // ... settings.pine
 
 currentHourTime = timestamp("UTC", year, month, dayofmonth, hour, 0)
@@ -97,16 +91,18 @@ hourBars = (60 / timeframe.multiplier)
 
 // =============== COMMONS ===============
 
-bullBase = input.color(#089981, "Bullish Color", group="Styles")
-bearBase = input.color(#f23645, "Bearish Color", group="Styles")
+alarmLabels = input.bool(true, "Alarm-Labels", group="Debug")
+
+bullBase = input.color(#f4d03f, "Bullish Color", group="Styles")
+bearBase = input.color(#d5dbdb, "Bearish Color", group="Styles")
 
 bullCss        = color.new(bullBase, 70)
 bearCss        = color.new(bearBase, 70)
 bullCssBorder  = color.new(bullBase, 50)
 bearCssBorder  = color.new(bearBase, 50)
 
-bullCssLight   = color.new(bullBase, 95)
-bearCssLight   = color.new(bearBase, 95)
+bullCssLight   = color.new(bullBase, 80)
+bearCssLight   = color.new(bearBase, 80)
 bullCssBorderLight   = color.new(bullBase, 90)
 bearCssBorderLight   = color.new(bearBase, 90)
 
@@ -118,6 +114,7 @@ noneColor = color.new(color.white, 100)
 // ... commons.pine
 
 float debugLabelOffset = low
+color trasparent = color.new(color.white, 100)
 
 debugLabel(float offset, string debugText) =>
     label.new(bar_index, offset, debugText, size=size.small, color=color.silver, textcolor=color.white, style=label.style_label_upper_left)
@@ -168,12 +165,17 @@ getMaxRatio (float min, float max, float max_value) =>
 getMaxRatioText (float min, float max, float max_value) =>
   "1:" + str.tostring(getMaxRatio(min, max, max_value))
   
-  
+
+showAlarm (string alarmText, string pos, bool condition = true) => 
+    if alarmLabels and condition
+        infoLabelStyle = pos == "bottom" ? label.style_label_up :  label.style_label_down
+        infoLabelY  = pos == "bottom" ? low : high
+        infoLabel = label.new(bar_index, infoLabelY, alarmText, size=size.small, color=color.red, textcolor=color.white, style=infoLabelStyle)
+
 
 // ... fvg.functions.pine
 fvgMaxAgeBars = fvgMaxAge * hourBars
 
-fvgDebug = false
 fvgDebugStartTime = 0
 fvgAtrHour = request.security(syminfo.tickerid, "60", ta.atr(fvgAtrLength))
 
@@ -220,7 +222,7 @@ type FvgState
 createFvgState(FvgDefinition fvg) => 
     percentText = getPercentTextFromSize(fvg.min, fvg.max)
     label = percentText + getConditionalText(fvgDebug, str.tostring(fvg.startTime), " ")
-    FvgState.new()
+    FvgState.new(label)
     
 //-----------------------------------------------------------------------------
 
@@ -238,7 +240,7 @@ createFvgDraw (FvgDefinition fvg, FvgState state) =>
     colorBg = fvg.isBull ? bullCss : bearCss
     colorLine = fvg.isBull ? bullCssBorder : bearCssBorder
 
-    b = box.new(fvg.startIndex, fvg.max, bar_index, fvg.min, bgcolor = colorBg, border_color = colorLine)
+    b = box.new(fvg.startIndex, fvg.max, bar_index, fvg.min, bgcolor=colorBg, border_color = colorLine)
     l1 = line.new(x1=fvg.startIndex, y1=center_line_level, x2=bar_index, y2=center_line_level, color=color.gray, style=line.style_dotted, xloc=xloc.bar_index)
     l2 = line.new(x1=fvg.startIndex, y1=fvg.alarmLevel, x2=bar_index, y2=fvg.alarmLevel, color=colorLine, style=line.style_dotted, xloc=xloc.bar_index)
     infoLabel = label.new(fvg.startIndex+1, center_line_level, state.label, size=size.small, color=colorLine, textcolor=textColor, style=label.style_label_left)
@@ -252,6 +254,11 @@ fvgDrawSetInvalidated(FvgDraw draw, FvgDefinition def) =>
     else 
         box.set_bgcolor(draw.drawBox, bearCssLight)
         box.set_border_color(draw.drawBox, bearCssBorderLight)
+
+fvgDrawMitigate (FvgDraw draw) => 
+    box.set_right(draw.drawBox, bar_index)
+    line.set_x2(draw.centerLine, bar_index)
+    line.set_x2(draw.alarmLine, bar_index)
 
 fvgDrawRemove(FvgDraw draw) =>
     box.delete(draw.drawBox)
@@ -365,34 +372,34 @@ fvgGetInvalidatedText(Fvg fvg) =>
     tagContent := tagContent + "," + "type:"+"FVG-INVALIDATED"
     "size:"+sizePercentText+"["+tagContent+"]"
         
-fvgPerformStep(Fvg fvg) =>
-    actionInvalidate = false
-    actionEntered = false
-    actionNear = false
-    expired = (bar_index - fvg.def.startIndex) > fvgMaxAgeBars
-    state = fvg.state
-    if not expired and not fvg.state.was_invalidated
-        state.max_value := math.max(state.max_value, fvgGetMaxValue(fvg))
-        if fvgGetImpaled(fvg)
-            state.was_invalidated := true
-            actionInvalidate := true
+fvgCheckInBar(Fvg fvg) =>
+    FvgState state = fvg.state
+    string action = ""
+    if not state.isDead
+        expired = (bar_index - fvg.def.startIndex) > fvgMaxAgeBars
+        if expired
+            action := "kill"
             state.isDead := true
-        else if not state.was_invalidate_enter and fvgGetEntered(fvg, fvgTouchThreshold)
-            state.was_invalidate_enter := true
-        else if isNewHour and state.was_invalidate_enter and fvgGetCloseOutside(fvg)
-            state.was_invalidated := true
-            actionInvalidate := true
-            state.isDead := true
-        
-        if not state.was_entered and fvgGetEntered(fvg, 0.)
-            state.was_entered := true
-            actionEntered := true
-        else if not state.was_near and fvgGetNear(fvg)
-            state.was_near := true
-            actionNear := true
-    else
-        state.isDead := true
-    [state, actionInvalidate, actionEntered, actionNear]
+        else
+            state.max_value := math.max(state.max_value, fvgGetMaxValue(fvg))
+            if fvgGetImpaled(fvg)
+                action := "invalidate"
+                state.was_invalidated := true
+                state.isDead := true
+            else if fvgGetEntered(fvg, fvgTouchThreshold)
+                state.was_invalidate_enter := true
+            else if not state.was_entered and fvgGetEntered(fvg, 0.)
+                state.was_entered := true
+                action := "entered"
+            else if not state.was_near and fvgGetNear(fvg)
+                state.was_near := true
+                action := "near"
+
+            if isNewHour and state.was_invalidate_enter and fvgGetCloseOutside(fvg)
+                action := "invalidate"
+                state.was_invalidated := true
+                state.isDead := true
+    [state, action]
 
 
 // ... fvg.main.pine
@@ -411,18 +418,23 @@ string fvgDetectedText = ""
 if isNewHour
     new_fvg = request.security(syminfo.tickerid, "60", fvgDetect())
 
-    if not na(new_fvg) and new_fvg.startTime != fvg_lastStartTime
-        new_fvg.startIndex := bar_index - 2 * hourBars
-        fvg_lastStartTime := new_fvg.startTime
+    // debugLabelOffset := debugLabel(debugLabelOffset, str.tostring(isBull)+str.tostring(isBear))
 
-        state = createFvgState(new_fvg)
-        draw = createFvgDraw(new_fvg, state)
+    if not na(new_fvg)
+        if new_fvg.startTime != fvg_lastStartTime
+            new_fvg.startIndex := bar_index - 2 * hourBars
+            fvg_lastStartTime := new_fvg.startTime
 
-        fvg = Fvg.new(new_fvg, draw, state)
-        fvg_records.unshift(fvg)
+            state = createFvgState(new_fvg)
+            draw = createFvgDraw(new_fvg, state)
 
-        fvgDetected := true
-        fvgDetectedText := fvgGetDetectedText(fvg)
+            fvg = Fvg.new(new_fvg, draw, state)
+            fvg_records.unshift(fvg)
+
+            fvgDetected := true
+            fvgDetectedText := "FVG detected " + fvgGetDetectedText(fvg)
+            showAlarm(fvgDetectedText, fvg.def.isBull ? "bottom" : "top", fvgAlarmLabels)
+
 
 //-----------------------------------------------------------------------------
 // FVG - Mitigation Logik
@@ -445,27 +457,27 @@ if fvg_records.size() > 0
         fvg = fvg_records.get(i)
 
         if not fvg.state.isDead and (fvgDebugStartTime == 0 or fvg.def.startTime == fvgDebugStartTime)
-            [state, actionInvalidate, actionEntered, actionNear] = fvgPerformStep(fvg)
+            [state, action] = fvgCheckInBar(fvg)
             fvg.state := state
 
-            if actionEntered
+            if action == "entered"
                 fvgShowEnter := true
-                fvgShowEnterText := fvgGetEnteredText(fvg)
+                fvgShowEnterText := "FVG Entered " + fvgGetEnteredText(fvg)
+                showAlarm(fvgShowEnterText, fvg.def.isBull ? "bottom" : "top", fvgAlarmLabels)
                 fvgSetEnterText(fvg)
 
-            if actionNear
+            if action == "near"
                 fvgShowNear := true
-                fvgShowNearText := fvgGetNearText(fvg)
+                fvgShowNearText := "FVG Near " + fvgGetNearText(fvg)
+                showAlarm(fvgShowNearText, fvg.def.isBull ? "bottom" : "top", fvgAlarmLabels)
                 fvgSetEnterText(fvg)
 
-            if actionInvalidate
+            if action == "invalidate"
                 fvgShowInvalidated := true
                 fvgDrawSetInvalidated(fvg.draw, fvg.def)
 
             if not state.isDead
-                box.set_right(fvg.draw.drawBox, bar_index)
-                line.set_x2(fvg.draw.centerLine, bar_index)
-                line.set_x2(fvg.draw.alarmLine, bar_index)
+                fvgDrawMitigate(fvg.draw)
 
         fvg_records.set(i, fvg)
 
@@ -476,12 +488,6 @@ if fvg_records.size() > 0
             fvgDrawRemove(fvg.draw)
             fvg_records.remove(i)
         
-// 
-// 
-plotshape(fvgShowEnter, style=shape.triangledown, location=location.abovebar, color=color.gray, size=size.tiny)
-plotshape(fvgShowInvalidated, style=shape.xcross, location=location.abovebar, color=color.red, size=size.tiny)
-plotshape(fvgShowNear, style=shape.flag, location=location.abovebar, color=color.lime, size=size.tiny)
-
 
 //-----------------------------------------------------------------------------}
 //FVG - Alerts
@@ -492,12 +498,213 @@ plotshape(fvgShowNear, style=shape.flag, location=location.abovebar, color=color
 //alertcondition(fvgShowInvalidated, 'FVG-invalid', '{{ticker}} FairValueGap invalidated')
 
 if fvgShowEnter
-    alert(syminfo.ticker + "FVG Entered " + fvgShowEnterText, alert.freq_once_per_bar)
+    alert(syminfo.ticker + fvgShowEnterText, alert.freq_once_per_bar)
 else if fvgShowNear
-    alert(syminfo.ticker + "FVG Near " + fvgShowNearText, alert.freq_once_per_bar)
+    alert(syminfo.ticker + fvgShowNearText, alert.freq_once_per_bar)
 else if fvgDetected
-    alert(syminfo.ticker + "FVG detected " + fvgDetectedText, alert.freq_once_per_bar)
+    alert(syminfo.ticker + fvgDetectedText, alert.freq_once_per_bar)
     
+
+
+
+// ... lsob.functions.pine
+
+lsobMaxAgeBars = lsobMaxAge * hourBars
+
+type LsobDefinition 
+    string prefix
+    bool  isBull
+    float min
+    float max
+    int   startTime  // auto
+    int   startIndex = na // manual
+
+createLsobDefinition (string prefix, bool isBull, float min, float max) => 
+    LsobDefinition.new(prefix, isBull, min, max, time[2], na)
+    
+type LsobDraw
+    box   drawBox
+    line  topLine
+    line  bottomLine
+    label infoLabel
+
+type LsobState
+    string phase = 'pending'
+    bool toDelete = false
+    //bool isDelete = false
+    //bool wasInvalidated = false
+createLsobState () => 
+    LsobState.new('pending', false)
+
+type Lsob
+    LsobDefinition def
+    LsobDraw draw
+    LsobState state
+
+lsobGetName(LsobDefinition def) =>
+    name = def.isBull ? "LSOB (bull)" : "LSOB (bear)"
+    result = def.prefix + " " + name
+    if lsobDebug
+        result := result + " (" + str.tostring(def.startIndex)+")"
+    result
+
+
+createLsobDraw (LsobDefinition lsob) => 
+    height = lsob.max - lsob.min
+    center_line_level = lsob.min + height * 0.5
+
+    colorLabel = lsob.isBull ? bullCssBorder : bearCssBorder
+    colorBorder = lsob.isBull ? bullCssBorderLight : bearCssBorderLight
+
+    b = box.new(lsob.startIndex, lsob.max, bar_index, lsob.min, border_color=trasparent, bgcolor=trasparent)
+    topLine = line.new(lsob.startIndex, lsob.max, bar_index, lsob.max, color=colorBorder, style=line.style_dotted, xloc=xloc.bar_index)
+    bottomLine = line.new(lsob.startIndex, lsob.min, bar_index, lsob.min, color=colorBorder, style=line.style_dotted, xloc=xloc.bar_index)
+    infoLabelText = lsobGetName(lsob)
+    infoLabelStyle = lsob.isBull ? label.style_label_upper_left :  label.style_label_lower_left
+    infoLabelY  = lsob.isBull ? lsob.min : lsob.max
+    infoLabel = label.new(lsob.startIndex, infoLabelY, infoLabelText, size=size.small, color=colorLabel, textcolor=textColor, style=infoLabelStyle)
+
+    LsobDraw.new(b, topLine, bottomLine, infoLabel)
+
+removeLsobDraw (LsobDraw draw) => 
+    box.delete(draw.drawBox)
+    label.delete(draw.infoLabel)
+    line.delete(draw.topLine)
+    line.delete(draw.bottomLine)
+
+activateLsobDraw (LsobDefinition def, LsobDraw draw) => 
+    colorBg = def.isBull ? bullCss : bearCss
+    colorBorder = def.isBull ? bullCssBorder : bearCssBorder
+    box.set_bgcolor(draw.drawBox, colorBg)
+    line.set_color(draw.topLine, colorBorder)
+    line.set_color(draw.bottomLine, colorBorder)
+
+mitigateLsobDraw (LsobDraw draw) => 
+    box.set_right(draw.drawBox, bar_index)
+    line.set_x2(draw.topLine, bar_index)
+    line.set_x2(draw.bottomLine, bar_index)
+
+lsobGetTochedText(Lsob lsob) =>
+    result = lsobGetName(lsob.def) + " Touched"
+    result
+
+lsobGetLeaved(Lsob lsob) =>
+    lsob.def.isBull ? (low > lsob.def.max) : (high < lsob.def.min)
+    
+lsobGetImpaled(Lsob lsob) =>
+    lsob.def.isBull ? (low < lsob.def.min) : (high > lsob.def.max)
+    
+lsobGetTouched(Lsob lsob) =>
+    lsob.def.isBull ? (low < lsob.def.max) : (high > lsob.def.min)
+
+lsobDetect(prefix) =>
+    highest = ta.highest(lsobCheckDistance)
+    lowest = ta.lowest(lsobCheckDistance)
+    isBull = low == lowest
+    isBear = high == highest
+    LsobDefinition new_lsob = na
+    if isBull
+        new_lsob := createLsobDefinition(prefix, true, low, high)
+    if isBear
+        new_lsob := createLsobDefinition(prefix, false, low, high)
+    new_lsob
+
+lsobCheckInBar(Lsob lsob) =>
+    LsobState state = lsob.state
+    string action = ""
+    if not state.toDelete
+        expired = (bar_index - lsob.def.startIndex) > lsobMaxAgeBars
+        impaled = lsobGetImpaled(lsob)
+        if expired
+            action := "kill"
+            state.toDelete := true
+        else if impaled
+            action := "kill"
+            state.toDelete := true
+        else if state.phase != 'closed'
+            if state.phase != 'leaved'
+                if lsobGetLeaved(lsob)
+                    state.phase := 'leaved'
+                    action := "activated"
+            else if state.phase != 'closed'
+                if lsobGetTouched(lsob)
+                    state.phase := 'closed'
+                    action := "touch"
+    [state, action]
+ 
+// ... lsob.main.pine
+
+
+var lsob_records = array.new<Lsob>(0)
+
+
+var lsob_1h_lastStartTime = 0
+if losbShow and isNewHour
+    new_lsob = request.security(syminfo.tickerid, "60", lsobDetect("1h"))
+
+    if not na(new_lsob)
+        if new_lsob.startTime != lsob_1h_lastStartTime
+            new_lsob.startIndex := bar_index
+            lsob_1h_lastStartTime := new_lsob.startTime
+
+            lsob = Lsob.new(new_lsob, createLsobDraw(new_lsob), createLsobState())
+            lsob_records.unshift(lsob)
+ 
+var lsob_4h_lastStartTime = 0
+if losbShow and isNew4Hour
+    new_lsob = request.security(syminfo.tickerid, "240", lsobDetect("4h"))
+
+    if not na(new_lsob)
+        if new_lsob.startTime != lsob_4h_lastStartTime 
+            new_lsob.startIndex := bar_index
+            lsob_4h_lastStartTime := new_lsob.startTime
+
+            lsob = Lsob.new(new_lsob, createLsobDraw(new_lsob), createLsobState())
+            lsob_records.unshift(lsob)
+ 
+        // DEBUG
+        // debugText = (new_lsob.isBull?'u ':'d ') + str.tostring(new_lsob.min)+"-"+str.tostring(new_lsob.max) + " " + str.tostring(new_lsob.startIndex)
+        //debugLabelOffset := debugLabel(debugLabelOffset, debugText)
+
+//debugLabelOffset := debugLabel(debugLabelOffset, str.tostring(lsob_records.size()))
+//debugLabelOffset := debugLabel(debugLabelOffset, str.tostring(bar_index))
+
+// ... lsob.main-check.pine
+
+bool lsobTouched = false
+string lsobTouchedText = na
+
+// LSOBS Überprüfen
+if lsob_records.size() > 0
+    for i = lsob_records.size()-1 to 0
+        lsob = lsob_records.get(i)
+
+        [state, action] = lsobCheckInBar(lsob)
+
+        if action == "activated"
+            activateLsobDraw(lsob.def, lsob.draw)
+        else if action == "touch"
+            lsobTouched := true
+            lsobTouchedText := lsobGetTochedText(lsob)
+            showAlarm(lsobTouchedText, lsob.def.isBull ? "bottom" : "top")
+
+        if action == "touch" or state.phase != 'closed'
+            mitigateLsobDraw(lsob.draw)
+
+        lsob.state := state
+        lsob_records.set(i, lsob)
+
+
+if lsob_records.size() > 0
+    for i = lsob_records.size()-1 to 0
+        lsob = lsob_records.get(i)
+        //debugLabelOffset := debugLabel(debugLabelOffset, str.tostring(lsob.state.toDelete)+" "+str.tostring(lsob.def.startIndex))
+        if lsob.state.toDelete
+            removeLsobDraw(lsob.draw)
+            lsob_records.remove(i)
+
+if lsobTouched
+    alert(syminfo.ticker + lsobTouchedText, alert.freq_once_per_bar)
 
 
 // ... side-by-side.pine
@@ -551,10 +758,11 @@ plotshape(
   )
 
 if spsBull
+    showAlarm("Side By Side Bullish", "bottom")
     alert(syminfo.ticker + " Side By Side Bullish", alert.freq_once_per_bar)
 if spsBear
+    showAlarm("Side By Side Bearish", "top")
     alert(syminfo.ticker + " Side By Side Bearish", alert.freq_once_per_bar)
-
 
 
 // ... rsi-div.main.pine
@@ -655,6 +863,52 @@ if isNewHour
     if rsi60BearAlertCond
         alert(syminfo.ticker + " RSI-Divergence Bearish", alert.freq_once_per_bar)
 
+// ... liqui-grap.main.pine
+
+ 
+
+
+import DevLucem/ZigLib/1 as ZigZag
+
+liquiGrapHishLowDetection(lastHigh, lastLow) =>
+    actualHigh = lastHigh
+    actualLow = lastLow
+    [liquiGrapDirection, liquiGrapZ1, liquiGrapZ2] = ZigZag.zigzag(low, high, liquiGrapDepth, liquiGrapDeviation, liquiGrapBackstep)
+
+    if bar_index > liquiGrapDepth
+        newHighCandidate = liquiGrapDirection != liquiGrapDirection[1] and liquiGrapDirection[1] > 0
+        newLowCandidate = liquiGrapDirection != liquiGrapDirection[1] and liquiGrapDirection[1] < 0
+        if newHighCandidate
+            swingHigh = (liquiGrapZ2[1]).price
+            actualHigh := swingHigh
+        if newLowCandidate
+            swingLow = (liquiGrapZ2[1]).price
+            actualLow := swingLow
+    [actualHigh, actualLow]
+
+var float liquiGrapLastHigh = na
+var float liquiGrapLastLow = na
+[newHigh, newLow] = liquiGrapHishLowDetection(liquiGrapLastHigh, liquiGrapLastLow)
+
+if not na(newHigh) and high > newHigh
+    if open < newHigh and close < newHigh
+        showAlarm("Liquidity Grap Bearish", "top")
+        alert(syminfo.ticker + " Liquidity Grap Bearish", alert.freq_once_per_bar)
+    newHigh := na
+
+if not na(newLow) and low < newLow
+    if open > newLow and close > newLow
+        showAlarm("Liquidity Grap Bullish", "top")
+        alert(syminfo.ticker + " Liquidity Grap Bullish", alert.freq_once_per_bar)
+    newLow := na
+
+liquiGrapLastHigh := newHigh
+liquiGrapLastLow := newLow
+
+//plot(liquiGrapLastHigh, title="Swing High (aktiv)", color=color.yellow, style=plot.style_line, linewidth=2)
+//plot(liquiGrapLastLow, title="Swing Low (aktiv)", color=color.yellow, style=plot.style_line, linewidth=2)
+
+ 
 
 // ... emas.pine
 
@@ -664,205 +918,6 @@ plotEmas = input.bool(true, "Plot EMAs", group="Extras")
 plot(plotEmas ? ta.ema(close, 20) : na, title="EMA 20", color=color.orange)
 plot(plotEmas ? ta.ema(close, 50) : na, title="EMA 50", color=color.blue, linewidth = 2)
 plot(plotEmas ? ta.ema(close, 200) : na, title="EMA 200", color=color.gray, linewidth = 3)
-
-
-
-// ... lsob.functions.pine
-
-lsobMaxAgeBars = lsobMaxAge * hourBars
-
-lsobBgColorActive = color.new(color.silver, 50)
-lsobBgColorInactive = color.new(color.silver, 90)
-
-lsobDebug = true
-
-type LsobDefinition 
-    string prefix
-    bool  isBull
-    float min
-    float max
-    int   startTime  // auto
-    int   startIndex = na // manual
-
-createLsobDefinition (string prefix, bool isBull, float min, float max) => 
-    LsobDefinition.new(prefix, isBull, min, max, time[2], na)
-    
-type LsobDraw
-    box   drawBox
-    label infoLabel
-
-type LsobState
-    string phase = 'pending'
-    bool toDelete = false
-    //bool isDelete = false
-    //bool wasInvalidated = false
-createLsobState () => 
-    LsobState.new('pending', false)
-
-type Lsob
-    LsobDefinition def
-    LsobDraw draw
-    LsobState state
-
-lsobGetName(LsobDefinition def) =>
-    name = def.isBull ? "LSOB (bull)" : "LSOB (bear)"
-    result = def.prefix + " " + name
-    if lsobDebug
-        result := result + " (" + str.tostring(def.startIndex)+")"
-    result
-
-
-createLsobDraw (LsobDefinition lsob) => 
-    height = lsob.max - lsob.min
-    center_line_level = lsob.min + height * 0.5
-
-    colorBg = color.silver // lsob.isBull ? bullCss : bearCss
-
-    b = box.new(lsob.startIndex, lsob.max, bar_index, lsob.min, border_color = colorBg, bgcolor=lsobBgColorInactive)
-    infoLabelText = lsobGetName(lsob)
-    infoLabelStyle = lsob.isBull ? label.style_label_upper_left :  label.style_label_lower_left
-    infoLabelY  = lsob.isBull ? lsob.min : lsob.max
-    infoLabel = label.new(lsob.startIndex, infoLabelY, infoLabelText, size=size.small, color=color.silver, textcolor=color.white, style=infoLabelStyle)
-
-    LsobDraw.new(b, infoLabel)
-
-removeLsobDraw (LsobDraw draw) => 
-    box.delete(draw.drawBox)
-    label.delete(draw.infoLabel)
-
-activateLsobDraw (LsobDraw draw) => 
-    box.set_bgcolor(draw.drawBox, lsobBgColorActive)
-
-touchLsobDraw (LsobDefinition def, touchText) => 
-    infoLabelStyle = def.isBull ? label.style_label_upper_left :  label.style_label_lower_left
-    infoLabelY  = def.isBull ? low : high
-    infoLabeTxt = touchText
-    infoLabel = label.new(bar_index, infoLabelY, infoLabeTxt, size=size.small, color=color.silver, textcolor=color.white, style=infoLabelStyle)
-
-mitigateLsobDraw (LsobDraw draw) => 
-    box.set_right(draw.drawBox, bar_index)
-
-lsobGetTochedText(Lsob lsob) =>
-    result = lsobGetName(lsob.def) + " Touched"
-    result
-
-lsobGetLeaved(Lsob lsob) =>
-    lsob.def.isBull ? (low > lsob.def.max) : (high < lsob.def.min)
-    
-lsobGetImpaled(Lsob lsob) =>
-    lsob.def.isBull ? (low < lsob.def.min) : (high > lsob.def.max)
-    
-lsobGetTouched(Lsob lsob) =>
-    lsob.def.isBull ? (low < lsob.def.max) : (high > lsob.def.min)
-
-lsobDetect(prefix) =>
-    highest = ta.highest(lsobCheckDistance)
-    lowest = ta.lowest(lsobCheckDistance)
-    isBull = low == lowest
-    isBear = high == highest
-    LsobDefinition new_lsob = na
-    if isBull
-        new_lsob := createLsobDefinition(prefix, true, low, high)
-    if isBear
-        new_lsob := createLsobDefinition(prefix, false, low, high)
-    new_lsob
-
-lsobCheckInBar(Lsob lsob) =>
-    LsobState state = lsob.state
-    string action = ""
-    if not state.toDelete
-        expired = (bar_index - lsob.def.startIndex) > lsobMaxAgeBars
-        impaled = lsobGetImpaled(lsob)
-        if expired
-            action := "kill"
-            state.toDelete := true
-        else if impaled
-            action := "kill"
-            state.toDelete := true
-        else if state.phase != 'closed'
-            if state.phase != 'leaved'
-                if lsobGetLeaved(lsob)
-                    state.phase := 'leaved'
-                    action := "activated"
-            else if state.phase != 'closed'
-                if lsobGetTouched(lsob)
-                    state.phase := 'closed'
-                    action := "touch"
-    [state, action]
- 
-// ... lsob.main.pine
-
-
-var lsob_records = array.new<Lsob>(0)
-
-
-var lsob_1h_lastStartTime = 0
-if losbShow and isNewHour
-    new_lsob = request.security(syminfo.tickerid, "60", lsobDetect("1h"))
-
-    if not na(new_lsob) and new_lsob.startTime != lsob_1h_lastStartTime
-        new_lsob.startIndex := bar_index
-        lsob_1h_lastStartTime := new_lsob.startTime
-
-        lsob = Lsob.new(new_lsob, createLsobDraw(new_lsob), createLsobState())
-        lsob_records.unshift(lsob)
- 
-var lsob_4h_lastStartTime = 0
-if losbShow and isNew4Hour
-    new_lsob = request.security(syminfo.tickerid, "240", lsobDetect("4h"))
-
-    if not na(new_lsob) and new_lsob.startTime != lsob_4h_lastStartTime 
-        new_lsob.startIndex := bar_index
-        lsob_4h_lastStartTime := new_lsob.startTime
-
-        lsob = Lsob.new(new_lsob, createLsobDraw(new_lsob), createLsobState())
-        lsob_records.unshift(lsob)
- 
-        // DEBUG
-        // debugText = (new_lsob.isBull?'u ':'d ') + str.tostring(new_lsob.min)+"-"+str.tostring(new_lsob.max) + " " + str.tostring(new_lsob.startIndex)
-        //debugLabelOffset := debugLabel(debugLabelOffset, debugText)
-
-//debugLabelOffset := debugLabel(debugLabelOffset, str.tostring(lsob_records.size()))
-//debugLabelOffset := debugLabel(debugLabelOffset, str.tostring(bar_index))
-
-// ... lsob.main-check.pine
-
-bool lsobTouched = false
-string lsobDetectedText = na
-
-// LSOBS Überprüfen
-if lsob_records.size() > 0
-    for i = lsob_records.size()-1 to 0
-        lsob = lsob_records.get(i)
-
-        [state, action] = lsobCheckInBar(lsob)
-
-        if action == "activated"
-            activateLsobDraw(lsob.draw)
-        else if action == "touch"
-            lsobTouched := true
-            lsobDetectedText := lsobGetTochedText(lsob)
-            if lsobDebug
-                touchLsobDraw(lsob.def, lsobDetectedText)
-
-        if action == "touch" or state.phase != 'closed'
-            mitigateLsobDraw(lsob.draw)
-
-        lsob.state := state
-        lsob_records.set(i, lsob)
-
-
-if lsob_records.size() > 0
-    for i = lsob_records.size()-1 to 0
-        lsob = lsob_records.get(i)
-        //debugLabelOffset := debugLabel(debugLabelOffset, str.tostring(lsob.state.toDelete)+" "+str.tostring(lsob.def.startIndex))
-        if lsob.state.toDelete
-            removeLsobDraw(lsob.draw)
-            lsob_records.remove(i)
-
-if lsobTouched
-    alert(syminfo.ticker + lsobDetectedText, alert.freq_once_per_bar)
-
 
 
 // ... vwap.pine

@@ -1,0 +1,45 @@
+
+ 
+
+
+import DevLucem/ZigLib/1 as ZigZag
+
+liquiGrapHishLowDetection(lastHigh, lastLow) =>
+    actualHigh = lastHigh
+    actualLow = lastLow
+    [liquiGrapDirection, liquiGrapZ1, liquiGrapZ2] = ZigZag.zigzag(low, high, liquiGrapDepth, liquiGrapDeviation, liquiGrapBackstep)
+
+    if bar_index > liquiGrapDepth
+        newHighCandidate = liquiGrapDirection != liquiGrapDirection[1] and liquiGrapDirection[1] > 0
+        newLowCandidate = liquiGrapDirection != liquiGrapDirection[1] and liquiGrapDirection[1] < 0
+        if newHighCandidate
+            swingHigh = (liquiGrapZ2[1]).price
+            actualHigh := swingHigh
+        if newLowCandidate
+            swingLow = (liquiGrapZ2[1]).price
+            actualLow := swingLow
+    [actualHigh, actualLow]
+
+var float liquiGrapLastHigh = na
+var float liquiGrapLastLow = na
+[newHigh, newLow] = liquiGrapHishLowDetection(liquiGrapLastHigh, liquiGrapLastLow)
+
+if not na(newHigh) and high > newHigh
+    if open < newHigh and close < newHigh
+        showAlarm("Liquidity Grap Bearish", "top")
+        alert(syminfo.ticker + " Liquidity Grap Bearish", alert.freq_once_per_bar)
+    newHigh := na
+
+if not na(newLow) and low < newLow
+    if open > newLow and close > newLow
+        showAlarm("Liquidity Grap Bullish", "top")
+        alert(syminfo.ticker + " Liquidity Grap Bullish", alert.freq_once_per_bar)
+    newLow := na
+
+liquiGrapLastHigh := newHigh
+liquiGrapLastLow := newLow
+
+//plot(liquiGrapLastHigh, title="Swing High (aktiv)", color=color.yellow, style=plot.style_line, linewidth=2)
+//plot(liquiGrapLastLow, title="Swing Low (aktiv)", color=color.yellow, style=plot.style_line, linewidth=2)
+
+ 

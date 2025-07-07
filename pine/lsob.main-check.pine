@@ -1,6 +1,6 @@
 
 bool lsobTouched = false
-string lsobDetectedText = na
+string lsobTouchedText = na
 
 // LSOBS Überprüfen
 if lsob_records.size() > 0
@@ -10,12 +10,11 @@ if lsob_records.size() > 0
         [state, action] = lsobCheckInBar(lsob)
 
         if action == "activated"
-            activateLsobDraw(lsob.draw)
+            activateLsobDraw(lsob.def, lsob.draw)
         else if action == "touch"
             lsobTouched := true
-            lsobDetectedText := lsobGetTochedText(lsob)
-            if lsobDebug
-                touchLsobDraw(lsob.def, lsobDetectedText)
+            lsobTouchedText := lsobGetTochedText(lsob)
+            showAlarm(lsobTouchedText, lsob.def.isBull ? "bottom" : "top")
 
         if action == "touch" or state.phase != 'closed'
             mitigateLsobDraw(lsob.draw)
@@ -33,4 +32,4 @@ if lsob_records.size() > 0
             lsob_records.remove(i)
 
 if lsobTouched
-    alert(syminfo.ticker + lsobDetectedText, alert.freq_once_per_bar)
+    alert(syminfo.ticker + lsobTouchedText, alert.freq_once_per_bar)

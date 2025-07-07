@@ -13,18 +13,23 @@ string fvgDetectedText = ""
 if isNewHour
     new_fvg = request.security(syminfo.tickerid, "60", fvgDetect())
 
-    if not na(new_fvg) and new_fvg.startTime != fvg_lastStartTime
-        new_fvg.startIndex := bar_index - 2 * hourBars
-        fvg_lastStartTime := new_fvg.startTime
+    // debugLabelOffset := debugLabel(debugLabelOffset, str.tostring(isBull)+str.tostring(isBear))
 
-        state = createFvgState(new_fvg)
-        draw = createFvgDraw(new_fvg, state)
+    if not na(new_fvg)
+        if new_fvg.startTime != fvg_lastStartTime
+            new_fvg.startIndex := bar_index - 2 * hourBars
+            fvg_lastStartTime := new_fvg.startTime
 
-        fvg = Fvg.new(new_fvg, draw, state)
-        fvg_records.unshift(fvg)
+            state = createFvgState(new_fvg)
+            draw = createFvgDraw(new_fvg, state)
 
-        fvgDetected := true
-        fvgDetectedText := fvgGetDetectedText(fvg)
+            fvg = Fvg.new(new_fvg, draw, state)
+            fvg_records.unshift(fvg)
+
+            fvgDetected := true
+            fvgDetectedText := "FVG detected " + fvgGetDetectedText(fvg)
+            showAlarm(fvgDetectedText, fvg.def.isBull ? "bottom" : "top", fvgAlarmLabels)
+
 
 //-----------------------------------------------------------------------------
 // FVG - Mitigation Logik
@@ -47,27 +52,27 @@ if fvg_records.size() > 0
         fvg = fvg_records.get(i)
 
         if not fvg.state.isDead and (fvgDebugStartTime == 0 or fvg.def.startTime == fvgDebugStartTime)
-            [state, actionInvalidate, actionEntered, actionNear] = fvgPerformStep(fvg)
+            [state, action] = fvgCheckInBar(fvg)
             fvg.state := state
 
-            if actionEntered
+            if action == "entered"
                 fvgShowEnter := true
-                fvgShowEnterText := fvgGetEnteredText(fvg)
+                fvgShowEnterText := "FVG Entered " + fvgGetEnteredText(fvg)
+                showAlarm(fvgShowEnterText, fvg.def.isBull ? "bottom" : "top", fvgAlarmLabels)
                 fvgSetEnterText(fvg)
 
-            if actionNear
+            if action == "near"
                 fvgShowNear := true
-                fvgShowNearText := fvgGetNearText(fvg)
+                fvgShowNearText := "FVG Near " + fvgGetNearText(fvg)
+                showAlarm(fvgShowNearText, fvg.def.isBull ? "bottom" : "top", fvgAlarmLabels)
                 fvgSetEnterText(fvg)
 
-            if actionInvalidate
+            if action == "invalidate"
                 fvgShowInvalidated := true
                 fvgDrawSetInvalidated(fvg.draw, fvg.def)
 
             if not state.isDead
-                box.set_right(fvg.draw.drawBox, bar_index)
-                line.set_x2(fvg.draw.centerLine, bar_index)
-                line.set_x2(fvg.draw.alarmLine, bar_index)
+                fvgDrawMitigate(fvg.draw)
 
         fvg_records.set(i, fvg)
 
@@ -78,12 +83,6 @@ if fvg_records.size() > 0
             fvgDrawRemove(fvg.draw)
             fvg_records.remove(i)
         
-// 
-// 
-plotshape(fvgShowEnter, style=shape.triangledown, location=location.abovebar, color=color.gray, size=size.tiny)
-plotshape(fvgShowInvalidated, style=shape.xcross, location=location.abovebar, color=color.red, size=size.tiny)
-plotshape(fvgShowNear, style=shape.flag, location=location.abovebar, color=color.lime, size=size.tiny)
-
 
 //-----------------------------------------------------------------------------}
 //FVG - Alerts
@@ -94,9 +93,9 @@ plotshape(fvgShowNear, style=shape.flag, location=location.abovebar, color=color
 //alertcondition(fvgShowInvalidated, 'FVG-invalid', '{{ticker}} FairValueGap invalidated')
 
 if fvgShowEnter
-    alert(syminfo.ticker + "FVG Entered " + fvgShowEnterText, alert.freq_once_per_bar)
+    alert(syminfo.ticker + fvgShowEnterText, alert.freq_once_per_bar)
 else if fvgShowNear
-    alert(syminfo.ticker + "FVG Near " + fvgShowNearText, alert.freq_once_per_bar)
+    alert(syminfo.ticker + fvgShowNearText, alert.freq_once_per_bar)
 else if fvgDetected
-    alert(syminfo.ticker + "FVG detected " + fvgDetectedText, alert.freq_once_per_bar)
+    alert(syminfo.ticker + fvgDetectedText, alert.freq_once_per_bar)
     
