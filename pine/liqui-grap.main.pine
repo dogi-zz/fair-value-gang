@@ -1,45 +1,147 @@
 
  
+type HighLowDetectionState
+    int direction = 0
+    float lastHigh = na
+    float lastLow = na
+    int lastHighTime = na
+    int lastLowTime = na
+    bool newHigh = false
+    bool newLow = false
 
+type HighLowDetectionInvalidation
+    bool invalidatedHigh = false
+    bool invalidatedLow = false
 
 import DevLucem/ZigLib/1 as ZigZag
 
-liquiGrapHishLowDetection(lastHigh, lastLow) =>
-    actualHigh = lastHigh
-    actualLow = lastLow
-    [liquiGrapDirection, liquiGrapZ1, liquiGrapZ2] = ZigZag.zigzag(low, high, liquiGrapDepth, liquiGrapDeviation, liquiGrapBackstep)
-
-    if bar_index > liquiGrapDepth
-        newHighCandidate = liquiGrapDirection != liquiGrapDirection[1] and liquiGrapDirection[1] > 0
-        newLowCandidate = liquiGrapDirection != liquiGrapDirection[1] and liquiGrapDirection[1] < 0
+liquiGrapHishLowDetection(HighLowDetectionState state, int depth, int deviation, int backstep) =>
+    if bar_index > depth + backstep
+        state.newHigh := false
+        state.newLow := false
+        [direction, z1, z2] = ZigZag.zigzag(low, high, depth, deviation, backstep)
+        newHighCandidate = direction != state.direction and state.direction > 0
+        newLowCandidate = direction != state.direction and state.direction < 0
         if newHighCandidate
-            swingHigh = (liquiGrapZ2[1]).price
-            actualHigh := swingHigh
+            state.newHigh := true
+            state.lastHigh := (z2[1]).price
+            state.lastHighTime := (z2[1]).time
+
         if newLowCandidate
-            swingLow = (liquiGrapZ2[1]).price
-            actualLow := swingLow
-    [actualHigh, actualLow]
+            state.newLow := true
+            state.lastLow := (z2[1]).price
+            state.lastLowTime := (z2[1]).time
 
-var float liquiGrapLastHigh = na
-var float liquiGrapLastLow = na
-[newHigh, newLow] = liquiGrapHishLowDetection(liquiGrapLastHigh, liquiGrapLastLow)
+        state.direction := direction
+    state
+    // [actualHigh, actualLow]
 
-if not na(newHigh) and high > newHigh
-    if open < newHigh and close < newHigh
-        showAlarm("Liquidity Grap Bearish", "top")
-        alert(syminfo.ticker + " Liquidity Grap Bearish", alert.freq_once_per_bar)
-    newHigh := na
+liquiGrapHishLowCheck(HighLowDetectionState state, HighLowDetectionInvalidation invalid) =>
+    if not na(state.lastHigh) and high > state.lastHigh
+        invalid.invalidatedHigh := true
+    if not na(state.lastLow) and low < state.lastLow
+        invalid.invalidatedLow := true
+    invalid
 
-if not na(newLow) and low < newLow
-    if open > newLow and close > newLow
-        showAlarm("Liquidity Grap Bullish", "top")
-        alert(syminfo.ticker + " Liquidity Grap Bullish", alert.freq_once_per_bar)
-    newLow := na
 
-liquiGrapLastHigh := newHigh
-liquiGrapLastLow := newLow
+var HighLowDetectionState liquiGrapHighLow = HighLowDetectionState.new()
+var HighLowDetectionInvalidation liquiGrapHighLowInvalid = HighLowDetectionInvalidation.new()
 
-//plot(liquiGrapLastHigh, title="Swing High (aktiv)", color=color.yellow, style=plot.style_line, linewidth=2)
-//plot(liquiGrapLastLow, title="Swing Low (aktiv)", color=color.yellow, style=plot.style_line, linewidth=2)
+if isNewHour
+    liquiGrapHighLow := request.security(syminfo.tickerid, "60", liquiGrapHishLowDetection(liquiGrapHighLow, liquiGrapDepth, liquiGrapDeviation, liquiGrapBackstep))
+    if liquiGrapHighLow.newHigh
+        liquiGrapHighLowInvalid.invalidatedHigh := false
+    if liquiGrapHighLow.newLow
+        liquiGrapHighLowInvalid.invalidatedLow := false
+
+
+if liquiGrapDebug and liquiGrapHighLow.newHigh
+    label.new(bar_index, liquiGrapHighLow.lastHigh, 'H', size=size.small, color=color.red, textcolor=color.white, style=label.style_label_down)
+if liquiGrapDebug and liquiGrapHighLow.newLow
+    label.new(bar_index, liquiGrapHighLow.lastLow, 'L', size=size.small, color=color.red, textcolor=color.white, style=label.style_label_up)
+
+if not liquiGrapHighLowInvalid.invalidatedHigh 
+    if high > liquiGrapHighLow.lastHigh and close < liquiGrapHighLow.lastHigh
+        AlarmDefinition alarm = createAlarm("Liquidity Grap Bearish", "top")
+        showAlarm(alarm)
+        alert(alarm.alarmText, alert.freq_once_per_bar)
+
+if not liquiGrapHighLowInvalid.invalidatedLow
+    if low < liquiGrapHighLow.lastLow and close > liquiGrapHighLow.lastLow
+        AlarmDefinition alarm = createAlarm("Liquidity Grap Bullish", "bottom")
+        showAlarm(alarm)
+        alert(alarm.alarmText, alert.freq_once_per_bar)
+
+liquiGrapHighLowInvalid := liquiGrapHishLowCheck(liquiGrapHighLow, liquiGrapHighLowInvalid)
+ 
+plot(not liquiGrapDebug ? na : liquiGrapHighLow.lastHigh, title="Swing High (aktiv)", color=color.yellow, style=plot.style_line, linewidth=2)
+plot(not liquiGrapDebug ? na : liquiGrapHighLow.lastLow, title="Swing Low (aktiv)", color=color.gray, style=plot.style_line, linewidth=2)
 
  
+
+
+ 
+// ////////
+// // Fetch Ingredients 
+// // [
+// Depth = input.int(12, 'Depth', minval=1, step=1, group="ZigZag Config")
+// Deviation = input.int(5, 'Deviation', minval=1, step=1, group="ZigZag Config")
+// Backstep = input.int(2, 'Backstep', minval=2, step=1, group="ZigZag Config")
+// line_thick = input.int(2, 'Line Thickness', minval=1, maxval=4, group="Lines")
+// labels = input(0, "Labels Transparency", group="Labels")
+// upcolor = input(color.lime, 'Bull Color', group="Colors")
+// dncolor = input(color.red, 'Bear Color', group="Colors")
+// lines = input(0, "Lines Transparency", group="Lines")
+// background = input(80, "Background Transparency", group="Colors")
+// label_size = switch input.int(3, "Label SIze", minval=1, maxval=5, group="Labels")
+//     1 => size.tiny
+//     2 => size.small
+//     3 => size.normal
+//     4 => size.large
+//     5 => size.huge
+// repaint = input(true, 'Repaint Levels')
+// extend = input(false, "Extend ZigZag", group="Lines")
+// // ]
+// // ////////
+// // // Bake it with a simple oven this time
+// [direction, z1, z2] = ZigZag.zigzag(low, high, Depth, Deviation, Backstep)
+// string nowPoint = ""
+// var float lastPoint = z1.price[1]
+// if bool(ta.change(direction))
+//     lastPoint := z1.price[1]
+// // ////////
+// // // Let it Cool And Serve
+// line zz = na
+// label point = na
+// if repaint
+//     zz := line.new(z1, z2, xloc.bar_time, extend? extend.right: extend.none, color.new(direction>0? upcolor: dncolor, lines), width=line_thick)
+//     nowPoint := direction<0? (z2.price<lastPoint? "LL": "HL"): (z2.price>lastPoint? "HH": "LH")
+//     point := label.new(z2, nowPoint, xloc.bar_time, yloc.price, 
+//      color.new(direction<0? upcolor: dncolor, labels), direction>0? label.style_label_down: label.style_label_up, color.new(direction>0? upcolor: dncolor, labels), label_size)
+//     if direction == direction[1]
+//         line.delete(zz[1])
+//         label.delete(point[1])
+//     else
+//         line.set_extend(zz[1], extend.none)
+// else
+//     if direction != direction[1]
+//         zz := line.new(z1[1], z2[1], xloc.bar_time, extend.none, color.new(direction>0? upcolor: dncolor, lines), width=line_thick)
+//         nowPoint := direction[1]<0? (z2.price[1]<lastPoint[1]? "LL": "HL"): (z2.price[1]>lastPoint[1]? "HH": "LH")
+//         point := label.new(z2[1], nowPoint, xloc.bar_time, yloc.price, 
+//          color.new(direction[1]<0? upcolor: dncolor, labels), direction[1]>0? label.style_label_down: label.style_label_up, color.new(direction[1]>0? upcolor: dncolor, labels), label_size)
+// bgcolor(direction<0? color.new(dncolor, background): color.new(upcolor, background), title='Direction Background')
+// plotarrow(direction, "direction", display=display.status_line)
+
+
+// // ////////
+// // // Declare Meal Was Sweet By Force
+// alertcondition(nowPoint == "HH" and z2.price != z2.price[1], "New Higher High", 'Zigzag on {{ticker}} higher higher high detected at {{time}}')
+// alertcondition(nowPoint == "LH" and z2.price != z2.price[1], "New Lower High", 'Zigzag on {{ticker}} higher lower high detected at {{time}}')
+// alertcondition(nowPoint == "HL" and z2.price != z2.price[1], "New Higher Low", 'Zigzag on {{ticker}} higher lower low detected at {{time}}')
+// alertcondition(nowPoint == "LL" and z2.price != z2.price[1], "New Lower Low", 'Zigzag on {{ticker}} lower low detected at {{time}}')
+// alertcondition(direction != direction[1], 'Direction Changed', 'Zigzag on {{ticker}} direction changed at {{time}}')
+// alertcondition(direction != direction[1] and direction>0, 'Bullish Direction', 'Zigzag on {{ticker}} bullish direction at {{time}}')
+// alertcondition(direction != direction[1] and direction<0, 'Bearish Direction', 'Zigzag on {{ticker}} bearish direction at {{time}}')
+
+// if direction != direction[1]
+//     alert((direction<0? "Bearish": "Bullish") + " Direction Final ", alert.freq_once_per_bar_close)

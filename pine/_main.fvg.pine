@@ -1,11 +1,11 @@
 //@version=6
 indicator("Fair Value Gangster", "FV-Gang", overlay=true, max_lines_count=500, max_boxes_count=200)
 
-//DEFINE: FVG:true
-//DEFINE: LSOB:true
-//DEFINE: RSI:true
-//DEFINE: HINTS:true
-//DEFINE: SBS:true
+//DEFINE: FVG:false
+//DEFINE: LSOB:false
+//DEFINE: RSI:false
+//DEFINE: HINTS:false
+//DEFINE: SBS:false
 //DEFINE: LIGRAP:true
 
 

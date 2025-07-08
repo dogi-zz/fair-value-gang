@@ -1,11 +1,11 @@
 //@version=6
 indicator("Fair Value Gangster", "FV-Gang", overlay=true, max_lines_count=500, max_boxes_count=200)
 
-//DEFINE: FVG:true
-//DEFINE: LSOB:true
-//DEFINE: RSI:true
-//DEFINE: HINTS:true
-//DEFINE: SBS:true
+//DEFINE: FVG:false
+//DEFINE: LSOB:false
+//DEFINE: RSI:false
+//DEFINE: HINTS:false
+//DEFINE: SBS:false
 //DEFINE: LIGRAP:true
 
 
@@ -13,73 +13,20 @@ indicator("Fair Value Gangster", "FV-Gang", overlay=true, max_lines_count=500, m
 //Settings
 //-----------------------------------------------------------------------------
 
-// ... fvg.settings.pine
-
-// =============== FVG ===============
-
-fvgMaxAge = input.int(72, "FVG-Maximum Age in Hours", group="FVG Einstellungen")
-fvgAlarmLevel = input.float(0.75, "FVG-Near Level", step=0.1, group="FVG Einstellungen")
-fvgTouchThreshold = input.float(0.1, "FVG-Touch Threshold", minval=0.0, maxval=1, step=0.01, group="FVG Einstellungen")
-
-fvgInSizeLimitMode = input.string("percent", "FVG-GrößenLimit", options=["percent", "atr"], group="FVG Einstellungen")
-fvgAtrLength = input.int(14, "FVG-ATR Length", group="FVG Einstellungen")
-fvgAtrFactor = input.float(0.5, "FVG-Threshold Factor", minval=0.0, step=0.1, group="FVG Einstellungen")
-fvgPercentThreshold = input.float(0.5, "FVG-Percent-Threshold", minval=0.0, step=0.1, group="FVG Einstellungen")
-
-rrrHint = input.bool(true, "RiskReward Hint", group="FVG Risk/Reward")
-fvgRrrTarget = input.float(3, "Desired Range", minval=0.0, step=0.1, group="FVG Risk/Reward")
-
-fvgAlarmLabels = input.bool(false, "FVG-Alarm-Labels", group="FVG Einstellungen")
-
-fvgDebug = input.bool(false, "LFVGSOB-Debug", group="FVG Einstellungen")
-
-// ... lsob.settings.pine
-
-losbShow = input.bool(true, "LSOB-Anzeigen", group="LSOB Einstellungen")
-
-lsobCheckDistance = input.int(20, "LSOB-Check distance", group="LSOB Einstellungen")
-lsobMaxAge = input.int(168, "LSOB-Maximum Age in Hours", group="LSOB Einstellungen")
-lsobTouchThreshold = input.float(0.1, "LSOB-Touch Threshold", minval=0.0, maxval=1, step=0.01, group="LSOB Einstellungen")
-
-lsobDebug = input.bool(false, "LSOB-Debug", group="LSOB Einstellungen")
-
-
-// ... side-by-side.settings.pine
-
-
-
-// =============== SIDE-BY-SIDE SETTINGS ===============
-
-sbsInSizeLimitMode = input.string("percent", "SBS-GrößenLimit", options=["percent", "atr"], group="Side By Side Einstellungen")
-sbsAtrLength = input.int(14, "SBS-ATR Length", group="FVG Einstellungen")
-sbsAtrFactor = input.float(0.5, "SBS-Threshold Factor", minval=0.0, step=0.1, group="Side By Side Einstellungen")
-sbsPercentThreshold = input.float(0.5, "SBS-Percent-Threshold", minval=0.0, step=0.1, group="Side By Side Einstellungen")
-
-sbsTolerance = input.float(10, "SBS-Body Tolerance (%)", minval=0.0, step=0.01, group="Side By Side Einstellungen")
-
-
-
-// ... rsi-div.settings.pine
-
-
-// =============== RSI-DIVERGENCE SETTINGS ===============
-
-rsiLength = input.int(title="RSI Period", minval=1, defval=14, group="RSI - Divergence")
-rsiLookbackR = input.int(title="RSI Pivot Lookback Right", defval=5, display = display.data_window, group="RSI - Divergence")
-rsiLookbackL = input.int(title="RSI Pivot Lookback Left", defval=5, display = display.data_window, group="RSI - Divergence")
-rsiRangeUpper = input.int(title="RSI Max of Lookback Range", defval=60, display = display.data_window, group="RSI - Divergence")
-rsiRangeLower = input.int(title="RSI Min of Lookback Range", defval=5, display = display.data_window, group="RSI - Divergence")
-
-
-
+//IMPORT IF(FVG) fvg.settings.pine
+//IMPORT IF(LSOB) lsob.settings.pine
+//IMPORT IF(SBS) side-by-side.settings.pine
+//IMPORT IF(RSI) rsi-div.settings.pine
 // ... liqui-grap.settings.pine
 
 
 // =============== RSI-DIVERGENCE SETTINGS ===============
 
 liquiGrapDepth = input.int(12, 'Depth', minval=1, step=1, group="ZigZag Config")
-liquiGrapDeviation = input.int(2, 'Deviation', minval=1, step=1, group="ZigZag Config")
+liquiGrapDeviation = input.int(5, 'Deviation', minval=1, step=1, group="ZigZag Config")
 liquiGrapBackstep = input.int(5, 'Backstep', minval=2, step=1, group="ZigZag Config")
+
+liquiGrapDebug = input.bool(false, 'LiquiGrap Debug', group="ZigZag Config")
 
 // ... settings.pine
 
@@ -119,6 +66,7 @@ color trasparent = color.new(color.white, 100)
 debugLabel(float offset, string debugText) =>
     label.new(bar_index, offset, debugText, size=size.small, color=color.silver, textcolor=color.white, style=label.style_label_upper_left)
     offset - 0.01
+
 
 isBull(int offset = 0) =>
   close[offset] > open[offset]
@@ -166,789 +114,180 @@ getMaxRatioText (float min, float max, float max_value) =>
   "1:" + str.tostring(getMaxRatio(min, max, max_value))
   
 
-showAlarm (string alarmText, string pos, bool condition = true) => 
+type AlarmDefinition
+    string alarmText
+    string message
+    string pos
+
+createAlarm (string message, string pos) => 
+    AlarmDefinition.new(syminfo.ticker + " " + message, message, pos) 
+
+showAlarm (AlarmDefinition alarm, bool condition = true) => 
     if alarmLabels and condition
-        infoLabelStyle = pos == "bottom" ? label.style_label_up :  label.style_label_down
-        infoLabelY  = pos == "bottom" ? low : high
-        infoLabel = label.new(bar_index, infoLabelY, alarmText, size=size.small, color=color.red, textcolor=color.white, style=infoLabelStyle)
+        infoLabelStyle = alarm.pos == "bottom" ? label.style_label_up :  label.style_label_down
+        infoLabelY  = alarm.pos == "bottom" ? low : high
+        infoLabel = label.new(bar_index, infoLabelY, alarm.message, size=size.small, color=color.red, textcolor=color.white, style=infoLabelStyle)
 
 
-// ... fvg.functions.pine
-fvgMaxAgeBars = fvgMaxAge * hourBars
+//IMPORT IF(FVG) fvg.functions.pine
+//IMPORT IF(FVG) fvg.main.pine
 
-fvgDebugStartTime = 0
-fvgAtrHour = request.security(syminfo.tickerid, "60", ta.atr(fvgAtrLength))
 
-getFvgThreshold() =>
-    if fvgInSizeLimitMode == "percent"
-        fvgPercentThreshold * open[1] / 100
-    else
-        fvgAtrHour * fvgAtrFactor
+//IMPORT IF(LSOB) lsob.functions.pine
+//IMPORT IF(LSOB) lsob.main.pine
+//IMPORT IF(LSOB) lsob.main-check.pine
 
-getFvgAlarmLineLevel(isBull, min, max) =>
-    height = max - min
-    if isBull
-        max + height * fvgAlarmLevel
-    else
-        min - height * fvgAlarmLevel
-
-
-//-----------------------------------------------------------------------------
-
-type FvgDefinition 
-    bool  isBull
-    float min
-    float max
-    float alarmLevel
-    float startValue
-    int   startTime  // auto
-    int   startIndex = na // manual
- 
-createFvgDefinition (bool isBull, float min, float max, float startValue) => 
-    alarm_level = getFvgAlarmLineLevel(isBull, min, max)
-    FvgDefinition.new(isBull, min, max, alarm_level, na, time[2], na)
-
-//-----------------------------------------------------------------------------
-
-type FvgState
-    string label
-    bool  was_invalidated = false
-    bool  was_invalidate_enter = false
-    bool  was_near = false
-    bool  was_entered = false
-    float  max_value = 0.0
-    bool isDead = false
-
-createFvgState(FvgDefinition fvg) => 
-    percentText = getPercentTextFromSize(fvg.min, fvg.max)
-    label = percentText + getConditionalText(fvgDebug, str.tostring(fvg.startTime), " ")
-    FvgState.new(label)
-    
-//-----------------------------------------------------------------------------
-
-type FvgDraw
-    box   drawBox
-    line  centerLine
-    line  alarmLine
-    label infoLabel
-
-        
-createFvgDraw (FvgDefinition fvg, FvgState state) => 
-    height = fvg.max - fvg.min
-    center_line_level = fvg.min + height * 0.5
-
-    colorBg = fvg.isBull ? bullCss : bearCss
-    colorLine = fvg.isBull ? bullCssBorder : bearCssBorder
-
-    b = box.new(fvg.startIndex, fvg.max, bar_index, fvg.min, bgcolor=colorBg, border_color = colorLine)
-    l1 = line.new(x1=fvg.startIndex, y1=center_line_level, x2=bar_index, y2=center_line_level, color=color.gray, style=line.style_dotted, xloc=xloc.bar_index)
-    l2 = line.new(x1=fvg.startIndex, y1=fvg.alarmLevel, x2=bar_index, y2=fvg.alarmLevel, color=colorLine, style=line.style_dotted, xloc=xloc.bar_index)
-    infoLabel = label.new(fvg.startIndex+1, center_line_level, state.label, size=size.small, color=colorLine, textcolor=textColor, style=label.style_label_left)
-
-    FvgDraw.new(b, l1, l2, infoLabel)
-    
-fvgDrawSetInvalidated(FvgDraw draw, FvgDefinition def) =>
-    if def.isBull
-        box.set_bgcolor(draw.drawBox, bullCssLight)
-        box.set_border_color(draw.drawBox, bullCssBorderLight)
-    else 
-        box.set_bgcolor(draw.drawBox, bearCssLight)
-        box.set_border_color(draw.drawBox, bearCssBorderLight)
-
-fvgDrawMitigate (FvgDraw draw) => 
-    box.set_right(draw.drawBox, bar_index)
-    line.set_x2(draw.centerLine, bar_index)
-    line.set_x2(draw.alarmLine, bar_index)
-
-fvgDrawRemove(FvgDraw draw) =>
-    box.delete(draw.drawBox)
-    line.delete(draw.centerLine)
-    line.delete(draw.alarmLine)
-    label.delete(draw.infoLabel)
-
-
-//-----------------------------------------------------------------------------
-
-type Fvg
-    FvgDefinition def
-    FvgDraw draw
-    FvgState state
-
-//-----------------------------------------------------------------------------
-
-
-fvgDetect() =>
-    threshold = getFvgThreshold()
-    before_low = low[3]
-    before_high = high[3]
-    after_low = low[1]
-    after_high = high[1]
-    FvgDefinition new_fvg = na
-    isBull = after_low > before_high and (after_low - before_high) > threshold
-    isBear = after_high < before_low and (before_low - after_high) > threshold
-    if after_low > before_high and (after_low - before_high) > threshold
-        new_fvg := createFvgDefinition(true, before_high, after_low, open[2])
-    if after_high < before_low and (before_low - after_high) > threshold
-        new_fvg := createFvgDefinition(false, after_high, before_low, open[2])
-    new_fvg
-
-
-    
-fvgGetHeightCenter(Fvg fvg) =>
-    height = fvg.def.max - fvg.def.min
-    center = fvg.def.min + height / 2
-    [height, center]
-
-fvgGetMaxValue(Fvg fvg) =>
-    [height, center] = fvgGetHeightCenter(fvg)
-    fvg.def.isBull ? (close - center) : (center - close)
-
-fvgGetImpaled(Fvg fvg) =>
-    def = fvg.def
-    [height, center] = fvgGetHeightCenter(fvg)
-    def.isBull ? (low  < def.min) : (high > def.max)
-
-fvgGetEntered(Fvg fvg, threshold) =>
-    def = fvg.def
-    [height, center] = fvgGetHeightCenter(fvg)
-    def.isBull ? (low < def.max - height * threshold) : (high > def.min + height * threshold)
-     
-fvgGetCloseOutside(Fvg fvg) =>
-    def = fvg.def
-    def.isBull ? (close[1] > def.max) : (close[1] > def.min)
-     
-fvgGetNear(Fvg fvg) =>
-    def = fvg.def
-    [height, center] = fvgGetHeightCenter(fvg)
-    def.isBull ? (low < def.alarmLevel) : (high > def.alarmLevel)
-     
-
-fvgSetEnterText(Fvg fvg) =>
-    percentText = getPercentTextFromSize(fvg.def.min, fvg.def.max)
-    new_text = percentText + " " + getMaxRatioText(fvg.def.min, fvg.def.max, fvg.state.max_value)
-    label.set_text(fvg.draw.infoLabel, new_text + getConditionalText(fvgDebug, str.tostring(fvg.def.startTime), " "))
-  
-fvgGetDetectedText(Fvg fvg) => 
-    sizePrecent = getPercentFromSize(fvg.def.min, fvg.def.max)
-    sizePercentText = str.tostring(sizePrecent, "#.0")
-    tagContent = "tf:"+str.tostring(timeframe.period)
-    tagContent := tagContent + "," + "ts:"+str.tostring(fvg.def.startTime)
-    tagContent := tagContent + "," + "dir:"+(fvg.def.isBull?'bull':'bear')
-    tagContent := tagContent + "," + "type:"+"FVG-DETECTED"
-    tagContent := tagContent + "," + "size:"+sizePercentText
-    "size:"+sizePercentText+"["+tagContent+"]"
-    
-fvgGetEnteredText(Fvg fvg) => 
-    sizePrecent = getPercentFromSize(fvg.def.min, fvg.def.max)
-    sizePercentText = str.tostring(sizePrecent, "#.0")
-    maxRatioText = getMaxRatioText(fvg.def.min, fvg.def.max, fvg.state.max_value)
-    tagContent = "tf:"+str.tostring(timeframe.period)
-    tagContent := tagContent + "," + "ts:"+str.tostring(fvg.def.startTime)
-    tagContent := tagContent + "," + "dir:"+(fvg.def.isBull?'bull':'bear')
-    tagContent := tagContent + "," + "type:"+"FVG-ENTER"
-    tagContent := tagContent + "," + "size:"+sizePercentText
-    tagContent := tagContent + "," + "ratio:"+maxRatioText
-    "size:"+sizePercentText+"["+tagContent+"]"
-        
-fvgGetNearText(Fvg fvg) => 
-    sizePrecent = getPercentFromSize(fvg.def.min, fvg.def.max)
-    sizePercentText = str.tostring(sizePrecent, "#.0")
-    maxRatioText = getMaxRatioText(fvg.def.min, fvg.def.max, fvg.state.max_value)
-    tagContent = "tf:"+str.tostring(timeframe.period)
-    tagContent := tagContent + "," + "ts:"+str.tostring(fvg.def.startTime)
-    tagContent := tagContent + "," + "dir:"+(fvg.def.isBull?'bull':'bear')
-    tagContent := tagContent + "," + "type:"+"FVG-NEAR"
-    tagContent := tagContent + "," + "size:"+sizePercentText
-    tagContent := tagContent + "," + "ratio:"+maxRatioText
-    "size:"+sizePercentText+"["+tagContent+"]"
-        
-fvgGetInvalidatedText(Fvg fvg) => 
-    sizePrecent = getPercentFromSize(fvg.def.min, fvg.def.max)
-    sizePercentText = str.tostring(sizePrecent, "#.0")
-    maxRatioText = getMaxRatioText(fvg.def.min, fvg.def.max, fvg.state.max_value)
-    tagContent = "tf:"+str.tostring(timeframe.period)
-    tagContent := tagContent + "," + "ts:"+str.tostring(fvg.def.startTime)
-    tagContent := tagContent + "," + "dir:"+(fvg.def.isBull?'bull':'bear')
-    tagContent := tagContent + "," + "type:"+"FVG-INVALIDATED"
-    "size:"+sizePercentText+"["+tagContent+"]"
-        
-fvgCheckInBar(Fvg fvg) =>
-    FvgState state = fvg.state
-    string action = ""
-    if not state.isDead
-        expired = (bar_index - fvg.def.startIndex) > fvgMaxAgeBars
-        if expired
-            action := "kill"
-            state.isDead := true
-        else
-            state.max_value := math.max(state.max_value, fvgGetMaxValue(fvg))
-            if fvgGetImpaled(fvg)
-                action := "invalidate"
-                state.was_invalidated := true
-                state.isDead := true
-            else if fvgGetEntered(fvg, fvgTouchThreshold)
-                state.was_invalidate_enter := true
-            else if not state.was_entered and fvgGetEntered(fvg, 0.)
-                state.was_entered := true
-                action := "entered"
-            else if not state.was_near and fvgGetNear(fvg)
-                state.was_near := true
-                action := "near"
-
-            if isNewHour and state.was_invalidate_enter and fvgGetCloseOutside(fvg)
-                action := "invalidate"
-                state.was_invalidated := true
-                state.isDead := true
-    [state, action]
-
-
-// ... fvg.main.pine
-  
-//-----------------------------------------------------------------------------
-// FVG - Detection and display
-//-----------------------------------------------------------------------------
-
-
-var fvg_lastStartTime = 0
-var fvg_records = array.new<Fvg>(0)
-
-bool fvgDetected = false
-string fvgDetectedText = ""
-
-if isNewHour
-    new_fvg = request.security(syminfo.tickerid, "60", fvgDetect())
-
-    // debugLabelOffset := debugLabel(debugLabelOffset, str.tostring(isBull)+str.tostring(isBear))
-
-    if not na(new_fvg)
-        if new_fvg.startTime != fvg_lastStartTime
-            new_fvg.startIndex := bar_index - 2 * hourBars
-            fvg_lastStartTime := new_fvg.startTime
-
-            state = createFvgState(new_fvg)
-            draw = createFvgDraw(new_fvg, state)
-
-            fvg = Fvg.new(new_fvg, draw, state)
-            fvg_records.unshift(fvg)
-
-            fvgDetected := true
-            fvgDetectedText := "FVG detected " + fvgGetDetectedText(fvg)
-            showAlarm(fvgDetectedText, fvg.def.isBull ? "bottom" : "top", fvgAlarmLabels)
-
-
-//-----------------------------------------------------------------------------
-// FVG - Mitigation Logik
-//-----------------------------------------------------------------------------
-// Boxen rechts verschieben oder "abschließen"
-
-bool fvgShowEnter = false
-bool fvgShowNear = false
-string fvgShowEnterText = na
-string fvgShowNearText = na
-bool fvgShowInvalidated = false
-// 
-// float alarmMin = 0
-// float alarmMax = 0
-// bool alarmBull = false
-// 
-
-if fvg_records.size() > 0
-    for i = 0 to fvg_records.size() -1
-        fvg = fvg_records.get(i)
-
-        if not fvg.state.isDead and (fvgDebugStartTime == 0 or fvg.def.startTime == fvgDebugStartTime)
-            [state, action] = fvgCheckInBar(fvg)
-            fvg.state := state
-
-            if action == "entered"
-                fvgShowEnter := true
-                fvgShowEnterText := "FVG Entered " + fvgGetEnteredText(fvg)
-                showAlarm(fvgShowEnterText, fvg.def.isBull ? "bottom" : "top", fvgAlarmLabels)
-                fvgSetEnterText(fvg)
-
-            if action == "near"
-                fvgShowNear := true
-                fvgShowNearText := "FVG Near " + fvgGetNearText(fvg)
-                showAlarm(fvgShowNearText, fvg.def.isBull ? "bottom" : "top", fvgAlarmLabels)
-                fvgSetEnterText(fvg)
-
-            if action == "invalidate"
-                fvgShowInvalidated := true
-                fvgDrawSetInvalidated(fvg.draw, fvg.def)
-
-            if not state.isDead
-                fvgDrawMitigate(fvg.draw)
-
-        fvg_records.set(i, fvg)
-
-if fvg_records.size() > 0
-    for i = fvg_records.size()-1 to 0
-        fvg = fvg_records.get(i)
-        if box.get_left(fvg.draw.drawBox) < bar_index - fvgMaxAgeBars
-            fvgDrawRemove(fvg.draw)
-            fvg_records.remove(i)
-        
-
-//-----------------------------------------------------------------------------}
-//FVG - Alerts
-//-----------------------------------------------------------------------------{
-
-//alertcondition(fvgShowEnter, 'FVG-enter', '{{ticker}} FairValueGap ENTER')
-//alertcondition(fvgShowNear, 'FVG-near', '{{ticker}} FairValueGap NEAR')
-//alertcondition(fvgShowInvalidated, 'FVG-invalid', '{{ticker}} FairValueGap invalidated')
-
-if fvgShowEnter
-    alert(syminfo.ticker + fvgShowEnterText, alert.freq_once_per_bar)
-else if fvgShowNear
-    alert(syminfo.ticker + fvgShowNearText, alert.freq_once_per_bar)
-else if fvgDetected
-    alert(syminfo.ticker + fvgDetectedText, alert.freq_once_per_bar)
-    
-
-
-
-// ... lsob.functions.pine
-
-lsobMaxAgeBars = lsobMaxAge * hourBars
-
-type LsobDefinition 
-    string prefix
-    bool  isBull
-    float min
-    float max
-    int   startTime  // auto
-    int   startIndex = na // manual
-
-createLsobDefinition (string prefix, bool isBull, float min, float max) => 
-    LsobDefinition.new(prefix, isBull, min, max, time[2], na)
-    
-type LsobDraw
-    box   drawBox
-    line  topLine
-    line  bottomLine
-    label infoLabel
-
-type LsobState
-    string phase = 'pending'
-    bool toDelete = false
-    //bool isDelete = false
-    //bool wasInvalidated = false
-createLsobState () => 
-    LsobState.new('pending', false)
-
-type Lsob
-    LsobDefinition def
-    LsobDraw draw
-    LsobState state
-
-lsobGetName(LsobDefinition def) =>
-    name = def.isBull ? "LSOB (bull)" : "LSOB (bear)"
-    result = def.prefix + " " + name
-    if lsobDebug
-        result := result + " (" + str.tostring(def.startIndex)+")"
-    result
-
-
-createLsobDraw (LsobDefinition lsob) => 
-    height = lsob.max - lsob.min
-    center_line_level = lsob.min + height * 0.5
-
-    colorLabel = lsob.isBull ? bullCssBorder : bearCssBorder
-    colorBorder = lsob.isBull ? bullCssBorderLight : bearCssBorderLight
-
-    b = box.new(lsob.startIndex, lsob.max, bar_index, lsob.min, border_color=trasparent, bgcolor=trasparent)
-    topLine = line.new(lsob.startIndex, lsob.max, bar_index, lsob.max, color=colorBorder, style=line.style_dotted, xloc=xloc.bar_index)
-    bottomLine = line.new(lsob.startIndex, lsob.min, bar_index, lsob.min, color=colorBorder, style=line.style_dotted, xloc=xloc.bar_index)
-    infoLabelText = lsobGetName(lsob)
-    infoLabelStyle = lsob.isBull ? label.style_label_upper_left :  label.style_label_lower_left
-    infoLabelY  = lsob.isBull ? lsob.min : lsob.max
-    infoLabel = label.new(lsob.startIndex, infoLabelY, infoLabelText, size=size.small, color=colorLabel, textcolor=textColor, style=infoLabelStyle)
-
-    LsobDraw.new(b, topLine, bottomLine, infoLabel)
-
-removeLsobDraw (LsobDraw draw) => 
-    box.delete(draw.drawBox)
-    label.delete(draw.infoLabel)
-    line.delete(draw.topLine)
-    line.delete(draw.bottomLine)
-
-activateLsobDraw (LsobDefinition def, LsobDraw draw) => 
-    colorBg = def.isBull ? bullCss : bearCss
-    colorBorder = def.isBull ? bullCssBorder : bearCssBorder
-    box.set_bgcolor(draw.drawBox, colorBg)
-    line.set_color(draw.topLine, colorBorder)
-    line.set_color(draw.bottomLine, colorBorder)
-
-mitigateLsobDraw (LsobDraw draw) => 
-    box.set_right(draw.drawBox, bar_index)
-    line.set_x2(draw.topLine, bar_index)
-    line.set_x2(draw.bottomLine, bar_index)
-
-lsobGetTochedText(Lsob lsob) =>
-    result = lsobGetName(lsob.def) + " Touched"
-    result
-
-lsobGetLeaved(Lsob lsob) =>
-    lsob.def.isBull ? (low > lsob.def.max) : (high < lsob.def.min)
-    
-lsobGetImpaled(Lsob lsob) =>
-    lsob.def.isBull ? (low < lsob.def.min) : (high > lsob.def.max)
-    
-lsobGetTouched(Lsob lsob) =>
-    lsob.def.isBull ? (low < lsob.def.max) : (high > lsob.def.min)
-
-lsobDetect(prefix) =>
-    highest = ta.highest(lsobCheckDistance)
-    lowest = ta.lowest(lsobCheckDistance)
-    isBull = low == lowest
-    isBear = high == highest
-    LsobDefinition new_lsob = na
-    if isBull
-        new_lsob := createLsobDefinition(prefix, true, low, high)
-    if isBear
-        new_lsob := createLsobDefinition(prefix, false, low, high)
-    new_lsob
-
-lsobCheckInBar(Lsob lsob) =>
-    LsobState state = lsob.state
-    string action = ""
-    if not state.toDelete
-        expired = (bar_index - lsob.def.startIndex) > lsobMaxAgeBars
-        impaled = lsobGetImpaled(lsob)
-        if expired
-            action := "kill"
-            state.toDelete := true
-        else if impaled
-            action := "kill"
-            state.toDelete := true
-        else if state.phase != 'closed'
-            if state.phase != 'leaved'
-                if lsobGetLeaved(lsob)
-                    state.phase := 'leaved'
-                    action := "activated"
-            else if state.phase != 'closed'
-                if lsobGetTouched(lsob)
-                    state.phase := 'closed'
-                    action := "touch"
-    [state, action]
- 
-// ... lsob.main.pine
-
-
-var lsob_records = array.new<Lsob>(0)
-
-
-var lsob_1h_lastStartTime = 0
-if losbShow and isNewHour
-    new_lsob = request.security(syminfo.tickerid, "60", lsobDetect("1h"))
-
-    if not na(new_lsob)
-        if new_lsob.startTime != lsob_1h_lastStartTime
-            new_lsob.startIndex := bar_index
-            lsob_1h_lastStartTime := new_lsob.startTime
-
-            lsob = Lsob.new(new_lsob, createLsobDraw(new_lsob), createLsobState())
-            lsob_records.unshift(lsob)
- 
-var lsob_4h_lastStartTime = 0
-if losbShow and isNew4Hour
-    new_lsob = request.security(syminfo.tickerid, "240", lsobDetect("4h"))
-
-    if not na(new_lsob)
-        if new_lsob.startTime != lsob_4h_lastStartTime 
-            new_lsob.startIndex := bar_index
-            lsob_4h_lastStartTime := new_lsob.startTime
-
-            lsob = Lsob.new(new_lsob, createLsobDraw(new_lsob), createLsobState())
-            lsob_records.unshift(lsob)
- 
-        // DEBUG
-        // debugText = (new_lsob.isBull?'u ':'d ') + str.tostring(new_lsob.min)+"-"+str.tostring(new_lsob.max) + " " + str.tostring(new_lsob.startIndex)
-        //debugLabelOffset := debugLabel(debugLabelOffset, debugText)
-
-//debugLabelOffset := debugLabel(debugLabelOffset, str.tostring(lsob_records.size()))
-//debugLabelOffset := debugLabel(debugLabelOffset, str.tostring(bar_index))
-
-// ... lsob.main-check.pine
-
-bool lsobTouched = false
-string lsobTouchedText = na
-
-// LSOBS Überprüfen
-if lsob_records.size() > 0
-    for i = lsob_records.size()-1 to 0
-        lsob = lsob_records.get(i)
-
-        [state, action] = lsobCheckInBar(lsob)
-
-        if action == "activated"
-            activateLsobDraw(lsob.def, lsob.draw)
-        else if action == "touch"
-            lsobTouched := true
-            lsobTouchedText := lsobGetTochedText(lsob)
-            showAlarm(lsobTouchedText, lsob.def.isBull ? "bottom" : "top")
-
-        if action == "touch" or state.phase != 'closed'
-            mitigateLsobDraw(lsob.draw)
-
-        lsob.state := state
-        lsob_records.set(i, lsob)
-
-
-if lsob_records.size() > 0
-    for i = lsob_records.size()-1 to 0
-        lsob = lsob_records.get(i)
-        //debugLabelOffset := debugLabel(debugLabelOffset, str.tostring(lsob.state.toDelete)+" "+str.tostring(lsob.def.startIndex))
-        if lsob.state.toDelete
-            removeLsobDraw(lsob.draw)
-            lsob_records.remove(i)
-
-if lsobTouched
-    alert(syminfo.ticker + lsobTouchedText, alert.freq_once_per_bar)
-
-
-// ... side-by-side.pine
-
-
-// =============== SIDE-BY-SIDE ===============
-
-sbsAtrHour = request.security(syminfo.tickerid, "60", ta.atr(sbsAtrLength))
-
-getSideBySideThreshold() =>
-    if sbsInSizeLimitMode == "percent"
-        sbsPercentThreshold * open[1] / 100
-    else
-        sbsAtrHour * sbsAtrFactor
-
-
-spsBull = false
-spsBear = false
-
-if isNewHour
-    threshold = getSideBySideThreshold()
-    if bodySize(4) > threshold and bodySize(3) > threshold and bodySize(2) > threshold
-        p1 = math.abs(100 - proportionPercent(bodySize(4), bodySize(3)))
-        p2 = math.abs(100 - proportionPercent(bodySize(4), bodySize(2)))
-        p3 = proportionPercent(bodySize(4), bodySize(1))
-        if p1 < sbsTolerance and p2 < sbsTolerance and p3 < 50
-            if isBear(4) and isBull(3) and isBear(2) and isBull(1)
-                spsBull := true
-            if isBull(4) and isBear(3) and isBull(2) and isBear(1)
-                spsBear := true
-                  
-plotshape(
-  spsBull ? low[1] : na,
-  offset=-1,
-  title="Side By Side Bullish",
-  text="SBS-Bull",
-  style=shape.labelup,
-  location=location.absolute,
-  color=color.gray,
-  textcolor=color.white
-  )
-plotshape(
-  spsBear ? high[1] : na,
-  offset=-1,
-  title="Side By Side Bearish",
-  text="SBS-Bear",
-  style=shape.labeldown,
-  location=location.absolute,
-  color=color.gray,
-  textcolor=color.white
-  )
-
-if spsBull
-    showAlarm("Side By Side Bullish", "bottom")
-    alert(syminfo.ticker + " Side By Side Bullish", alert.freq_once_per_bar)
-if spsBear
-    showAlarm("Side By Side Bearish", "top")
-    alert(syminfo.ticker + " Side By Side Bearish", alert.freq_once_per_bar)
-
-
-// ... rsi-div.main.pine
-
-// =============== RSI-DIVERGENCE FUNCTIONALITY ===============
-
-rsiOffsetLeft = rsiLookbackR * hourBars
-rsiOffsetRight = rsiLookbackR * hourBars
-
-
-rsiIsInRange(cond) =>
-	bars = ta.barssince(cond == true)
-	rsiRangeLower <= bars and bars <= rsiRangeUpper
-
-
-rsiDetect() =>
-    rsiOsc = ta.rsi(close, rsiLength)
-
-    // Bullish
-    plFound = na(ta.pivotlow(rsiOsc, rsiLookbackL, rsiLookbackR)) ? false : true
-    inRangePl = rsiIsInRange(plFound[1])
-    oscHL = rsiOsc[rsiLookbackR] > ta.valuewhen(plFound, rsiOsc[rsiLookbackR], 1) and inRangePl
-    // Price: Lower Low
-    rsiPriceLL = low[rsiLookbackR] < ta.valuewhen(plFound, low[rsiLookbackR], 1)
-    bullCondAlert = rsiPriceLL and oscHL and plFound
-    bullAlertCond = rsiOsc < 30 and bullCondAlert
-
-    // Bearish
-    phFound = na(ta.pivothigh(rsiOsc, rsiLookbackL, rsiLookbackR)) ? false : true
-    inRangePh = rsiIsInRange(phFound[1])
-    oscLH = rsiOsc[rsiLookbackR] < ta.valuewhen(phFound, rsiOsc[rsiLookbackR], 1) and inRangePh
-
-    // Price: Higher High
-    rsiPriceHH = high[rsiLookbackR] > ta.valuewhen(phFound, high[rsiLookbackR], 1)
-
-    bearCondAlert = rsiPriceHH and oscLH and phFound
-    bearAlertCond = rsiOsc > 70 and bearCondAlert
-
-
-    [plFound, bullAlertCond, phFound, bearAlertCond]
-
-rsi60PlFound = false
-rsi60BullAlertCond = false
-rsi60PhFound = false
-rsi60BearAlertCond = false
-if isNewHour
-    [_rsi60PlFound, _rsi60BullAlertCond, _rsi60PhFound, _rsi60BearAlertCond] = request.security(syminfo.tickerid, "60", rsiDetect())
-    rsi60PlFound := _rsi60PlFound
-    rsi60BullAlertCond := _rsi60BullAlertCond
-    rsi60PhFound := _rsi60PhFound
-    rsi60BearAlertCond := _rsi60BearAlertCond
-
-// Bullish
-plot(
-  rsi60PlFound ? low[rsiOffsetRight] : na,
-  offset=-rsiOffsetRight,
-  title="Regular Bullish",
-  linewidth=2,
-  color=(rsi60BullAlertCond ? bullCssBorderLight : noneColor),
-  display = display.pane
-  )
-
-plotshape(
-  rsi60BullAlertCond ? low[rsiOffsetRight] : na,
-  offset=-rsiOffsetRight,
-  title="Regular Bullish Label",
-  text="RSI-Div Bull",
-  style=shape.labelup,
-  location=location.absolute,
-  color=bullCssBorder,
-  textcolor=textColor
-  )
-
- // Bearish
-plot(
-  rsi60PhFound ? high[rsiOffsetRight] : na,
-  offset=-rsiOffsetRight,
-  title="Regular Bearish",
-  linewidth=2,
-  color=(rsi60BearAlertCond ? bearCssBorderLight : noneColor),
-  display = display.pane
-  )
-
-plotshape(
-  rsi60BearAlertCond ? high[rsiOffsetRight] : na,
-  offset=-rsiOffsetRight,
-  title="Regular Bearish Label",
-  text="RSI-Div Bear",
-  style=shape.labeldown,
-  location=location.absolute,
-  color=bearCssBorder,
-  textcolor=textColor
-  )
-
-if isNewHour
-    if rsi60BullAlertCond
-        alert(syminfo.ticker + " RSI-Divergence Bullish", alert.freq_once_per_bar)
-    if rsi60BearAlertCond
-        alert(syminfo.ticker + " RSI-Divergence Bearish", alert.freq_once_per_bar)
-
+//IMPORT IF(SBS) side-by-side.pine
+//IMPORT IF(RSI) rsi-div.main.pine
 // ... liqui-grap.main.pine
 
  
+type HighLowDetectionState
+    int direction = 0
+    float lastHigh = na
+    float lastLow = na
+    int lastHighTime = na
+    int lastLowTime = na
+    bool newHigh = false
+    bool newLow = false
 
+type HighLowDetectionInvalidation
+    bool invalidatedHigh = false
+    bool invalidatedLow = false
 
 import DevLucem/ZigLib/1 as ZigZag
 
-liquiGrapHishLowDetection(lastHigh, lastLow) =>
-    actualHigh = lastHigh
-    actualLow = lastLow
-    [liquiGrapDirection, liquiGrapZ1, liquiGrapZ2] = ZigZag.zigzag(low, high, liquiGrapDepth, liquiGrapDeviation, liquiGrapBackstep)
-
-    if bar_index > liquiGrapDepth
-        newHighCandidate = liquiGrapDirection != liquiGrapDirection[1] and liquiGrapDirection[1] > 0
-        newLowCandidate = liquiGrapDirection != liquiGrapDirection[1] and liquiGrapDirection[1] < 0
+liquiGrapHishLowDetection(HighLowDetectionState state, int depth, int deviation, int backstep) =>
+    if bar_index > depth + backstep
+        state.newHigh := false
+        state.newLow := false
+        [direction, z1, z2] = ZigZag.zigzag(low, high, depth, deviation, backstep)
+        newHighCandidate = direction != state.direction and state.direction > 0
+        newLowCandidate = direction != state.direction and state.direction < 0
         if newHighCandidate
-            swingHigh = (liquiGrapZ2[1]).price
-            actualHigh := swingHigh
+            state.newHigh := true
+            state.lastHigh := (z2[1]).price
+            state.lastHighTime := (z2[1]).time
+
         if newLowCandidate
-            swingLow = (liquiGrapZ2[1]).price
-            actualLow := swingLow
-    [actualHigh, actualLow]
+            state.newLow := true
+            state.lastLow := (z2[1]).price
+            state.lastLowTime := (z2[1]).time
 
-var float liquiGrapLastHigh = na
-var float liquiGrapLastLow = na
-[newHigh, newLow] = liquiGrapHishLowDetection(liquiGrapLastHigh, liquiGrapLastLow)
+        state.direction := direction
+    state
+    // [actualHigh, actualLow]
 
-if not na(newHigh) and high > newHigh
-    if open < newHigh and close < newHigh
-        showAlarm("Liquidity Grap Bearish", "top")
-        alert(syminfo.ticker + " Liquidity Grap Bearish", alert.freq_once_per_bar)
-    newHigh := na
+liquiGrapHishLowCheck(HighLowDetectionState state, HighLowDetectionInvalidation invalid) =>
+    if not na(state.lastHigh) and high > state.lastHigh
+        invalid.invalidatedHigh := true
+    if not na(state.lastLow) and low < state.lastLow
+        invalid.invalidatedLow := true
+    invalid
 
-if not na(newLow) and low < newLow
-    if open > newLow and close > newLow
-        showAlarm("Liquidity Grap Bullish", "top")
-        alert(syminfo.ticker + " Liquidity Grap Bullish", alert.freq_once_per_bar)
-    newLow := na
 
-liquiGrapLastHigh := newHigh
-liquiGrapLastLow := newLow
+var HighLowDetectionState liquiGrapHighLow = HighLowDetectionState.new()
+var HighLowDetectionInvalidation liquiGrapHighLowInvalid = HighLowDetectionInvalidation.new()
 
-//plot(liquiGrapLastHigh, title="Swing High (aktiv)", color=color.yellow, style=plot.style_line, linewidth=2)
-//plot(liquiGrapLastLow, title="Swing Low (aktiv)", color=color.yellow, style=plot.style_line, linewidth=2)
+if isNewHour
+    liquiGrapHighLow := request.security(syminfo.tickerid, "60", liquiGrapHishLowDetection(liquiGrapHighLow, liquiGrapDepth, liquiGrapDeviation, liquiGrapBackstep))
+    if liquiGrapHighLow.newHigh
+        liquiGrapHighLowInvalid.invalidatedHigh := false
+    if liquiGrapHighLow.newLow
+        liquiGrapHighLowInvalid.invalidatedLow := false
+
+
+if liquiGrapDebug and liquiGrapHighLow.newHigh
+    label.new(bar_index, liquiGrapHighLow.lastHigh, 'H', size=size.small, color=color.red, textcolor=color.white, style=label.style_label_down)
+if liquiGrapDebug and liquiGrapHighLow.newLow
+    label.new(bar_index, liquiGrapHighLow.lastLow, 'L', size=size.small, color=color.red, textcolor=color.white, style=label.style_label_up)
+
+if not liquiGrapHighLowInvalid.invalidatedHigh 
+    if high > liquiGrapHighLow.lastHigh and close < liquiGrapHighLow.lastHigh
+        AlarmDefinition alarm = createAlarm("Liquidity Grap Bearish", "top")
+        showAlarm(alarm)
+        alert(alarm.alarmText, alert.freq_once_per_bar)
+
+if not liquiGrapHighLowInvalid.invalidatedLow
+    if low < liquiGrapHighLow.lastLow and close > liquiGrapHighLow.lastLow
+        AlarmDefinition alarm = createAlarm("Liquidity Grap Bullish", "bottom")
+        showAlarm(alarm)
+        alert(alarm.alarmText, alert.freq_once_per_bar)
+
+liquiGrapHighLowInvalid := liquiGrapHishLowCheck(liquiGrapHighLow, liquiGrapHighLowInvalid)
+ 
+plot(not liquiGrapDebug ? na : liquiGrapHighLow.lastHigh, title="Swing High (aktiv)", color=color.yellow, style=plot.style_line, linewidth=2)
+plot(not liquiGrapDebug ? na : liquiGrapHighLow.lastLow, title="Swing Low (aktiv)", color=color.gray, style=plot.style_line, linewidth=2)
 
  
 
-// ... emas.pine
+
+ 
+// ////////
+// // Fetch Ingredients 
+// // [
+// Depth = input.int(12, 'Depth', minval=1, step=1, group="ZigZag Config")
+// Deviation = input.int(5, 'Deviation', minval=1, step=1, group="ZigZag Config")
+// Backstep = input.int(2, 'Backstep', minval=2, step=1, group="ZigZag Config")
+// line_thick = input.int(2, 'Line Thickness', minval=1, maxval=4, group="Lines")
+// labels = input(0, "Labels Transparency", group="Labels")
+// upcolor = input(color.lime, 'Bull Color', group="Colors")
+// dncolor = input(color.red, 'Bear Color', group="Colors")
+// lines = input(0, "Lines Transparency", group="Lines")
+// background = input(80, "Background Transparency", group="Colors")
+// label_size = switch input.int(3, "Label SIze", minval=1, maxval=5, group="Labels")
+//     1 => size.tiny
+//     2 => size.small
+//     3 => size.normal
+//     4 => size.large
+//     5 => size.huge
+// repaint = input(true, 'Repaint Levels')
+// extend = input(false, "Extend ZigZag", group="Lines")
+// // ]
+// // ////////
+// // // Bake it with a simple oven this time
+// [direction, z1, z2] = ZigZag.zigzag(low, high, Depth, Deviation, Backstep)
+// string nowPoint = ""
+// var float lastPoint = z1.price[1]
+// if bool(ta.change(direction))
+//     lastPoint := z1.price[1]
+// // ////////
+// // // Let it Cool And Serve
+// line zz = na
+// label point = na
+// if repaint
+//     zz := line.new(z1, z2, xloc.bar_time, extend? extend.right: extend.none, color.new(direction>0? upcolor: dncolor, lines), width=line_thick)
+//     nowPoint := direction<0? (z2.price<lastPoint? "LL": "HL"): (z2.price>lastPoint? "HH": "LH")
+//     point := label.new(z2, nowPoint, xloc.bar_time, yloc.price, 
+//      color.new(direction<0? upcolor: dncolor, labels), direction>0? label.style_label_down: label.style_label_up, color.new(direction>0? upcolor: dncolor, labels), label_size)
+//     if direction == direction[1]
+//         line.delete(zz[1])
+//         label.delete(point[1])
+//     else
+//         line.set_extend(zz[1], extend.none)
+// else
+//     if direction != direction[1]
+//         zz := line.new(z1[1], z2[1], xloc.bar_time, extend.none, color.new(direction>0? upcolor: dncolor, lines), width=line_thick)
+//         nowPoint := direction[1]<0? (z2.price[1]<lastPoint[1]? "LL": "HL"): (z2.price[1]>lastPoint[1]? "HH": "LH")
+//         point := label.new(z2[1], nowPoint, xloc.bar_time, yloc.price, 
+//          color.new(direction[1]<0? upcolor: dncolor, labels), direction[1]>0? label.style_label_down: label.style_label_up, color.new(direction[1]>0? upcolor: dncolor, labels), label_size)
+// bgcolor(direction<0? color.new(dncolor, background): color.new(upcolor, background), title='Direction Background')
+// plotarrow(direction, "direction", display=display.status_line)
 
 
-plotEmas = input.bool(true, "Plot EMAs", group="Extras")
+// // ////////
+// // // Declare Meal Was Sweet By Force
+// alertcondition(nowPoint == "HH" and z2.price != z2.price[1], "New Higher High", 'Zigzag on {{ticker}} higher higher high detected at {{time}}')
+// alertcondition(nowPoint == "LH" and z2.price != z2.price[1], "New Lower High", 'Zigzag on {{ticker}} higher lower high detected at {{time}}')
+// alertcondition(nowPoint == "HL" and z2.price != z2.price[1], "New Higher Low", 'Zigzag on {{ticker}} higher lower low detected at {{time}}')
+// alertcondition(nowPoint == "LL" and z2.price != z2.price[1], "New Lower Low", 'Zigzag on {{ticker}} lower low detected at {{time}}')
+// alertcondition(direction != direction[1], 'Direction Changed', 'Zigzag on {{ticker}} direction changed at {{time}}')
+// alertcondition(direction != direction[1] and direction>0, 'Bullish Direction', 'Zigzag on {{ticker}} bullish direction at {{time}}')
+// alertcondition(direction != direction[1] and direction<0, 'Bearish Direction', 'Zigzag on {{ticker}} bearish direction at {{time}}')
 
-plot(plotEmas ? ta.ema(close, 20) : na, title="EMA 20", color=color.orange)
-plot(plotEmas ? ta.ema(close, 50) : na, title="EMA 50", color=color.blue, linewidth = 2)
-plot(plotEmas ? ta.ema(close, 200) : na, title="EMA 200", color=color.gray, linewidth = 3)
+// if direction != direction[1]
+//     alert((direction<0? "Bearish": "Bullish") + " Direction Final ", alert.freq_once_per_bar_close)
 
-
-// ... vwap.pine
-
-
-VWAP_GROUP = "VWAP Settings"
-CALC_MODE_TOOLTIP = "Determines the units used to calculate the distance of the bands. When 'Percentage' is selected, a multiplier of 1 means 1%."
-vwapCalcMode = input.string("Standard Deviation", "Bands Calculation Mode", options = ["Standard Deviation", "Percentage"], group = VWAP_GROUP, tooltip = CALC_MODE_TOOLTIP, display = display.data_window)
-
-vwapSrc = hlc3
-vwapCumVolume = ta.cum(volume)
-if barstate.islast and vwapCumVolume == 0
-    runtime.error("No volume is provided by the data vendor.")
-
-
-vwapWeekIsNewPeriod = timeframe.change("W")
-vwapMonthIsNewPeriod = timeframe.change("M")
-
-if na(vwapSrc[1])
-	vwapWeekIsNewPeriod := true
-
-float vwapWeekValue = na
-float vwapMonthValue = na
-
-if not timeframe.isdwm
-    [_vwap_w, _stdevUpper_w, _w] = ta.vwap(vwapSrc, vwapWeekIsNewPeriod, 1)
-	vwapWeekValue := _vwap_w
-    [_vwap_m, _stdevUpper_m, _m] = ta.vwap(vwapSrc, vwapMonthIsNewPeriod, 1)
-	vwapMonthValue := _vwap_m
-
-plot(vwapWeekValue, title = "VWAP-Week", color = color.silver, style = plot.style_circles, linewidth = 1)
-plot(vwapMonthValue, title = "VWAP-Month", color = color.silver, style = plot.style_circles, linewidth = 2)
-
+//IMPORT IF(HINTS) emas.pine
+//IMPORT IF(HINTS) vwap.pine
 

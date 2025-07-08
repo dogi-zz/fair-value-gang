@@ -3,5 +3,7 @@
 // =============== RSI-DIVERGENCE SETTINGS ===============
 
 liquiGrapDepth = input.int(12, 'Depth', minval=1, step=1, group="ZigZag Config")
-liquiGrapDeviation = input.int(2, 'Deviation', minval=1, step=1, group="ZigZag Config")
+liquiGrapDeviation = input.int(5, 'Deviation', minval=1, step=1, group="ZigZag Config")
 liquiGrapBackstep = input.int(5, 'Backstep', minval=2, step=1, group="ZigZag Config")
+
+liquiGrapDebug = input.bool(false, 'LiquiGrap Debug', group="ZigZag Config")

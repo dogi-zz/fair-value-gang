@@ -75,8 +75,7 @@ mitigateLsobDraw (LsobDraw draw) =>
     line.set_x2(draw.bottomLine, bar_index)
 
 lsobGetTochedText(Lsob lsob) =>
-    result = lsobGetName(lsob.def) + " Touched"
-    result
+    lsobGetName(lsob.def) + " Touched"
 
 lsobGetLeaved(Lsob lsob) =>
     lsob.def.isBull ? (low > lsob.def.max) : (high < lsob.def.min)

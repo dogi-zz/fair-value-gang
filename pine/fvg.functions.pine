@@ -225,3 +225,7 @@ fvgCheckInBar(Fvg fvg) =>
                 state.isDead := true
     [state, action]
 
+fvgCreateAlarm (FvgDefinition def, string message, string detials) => 
+    fullText = message + " " + detials
+    position = def.isBull ? "bottom" : "top"
+    createAlarm(fullText, position)

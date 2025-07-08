@@ -7,8 +7,7 @@
 var fvg_lastStartTime = 0
 var fvg_records = array.new<Fvg>(0)
 
-bool fvgDetected = false
-string fvgDetectedText = ""
+AlarmDefinition fvgDetectedAlarm = na
 
 if isNewHour
     new_fvg = request.security(syminfo.tickerid, "60", fvgDetect())
@@ -26,9 +25,7 @@ if isNewHour
             fvg = Fvg.new(new_fvg, draw, state)
             fvg_records.unshift(fvg)
 
-            fvgDetected := true
-            fvgDetectedText := "FVG detected " + fvgGetDetectedText(fvg)
-            showAlarm(fvgDetectedText, fvg.def.isBull ? "bottom" : "top", fvgAlarmLabels)
+            fvgDetectedAlarm := fvgCreateAlarm(fvg.def, "FVG detected", fvgGetDetectedText(fvg))
 
 
 //-----------------------------------------------------------------------------
@@ -36,10 +33,9 @@ if isNewHour
 //-----------------------------------------------------------------------------
 // Boxen rechts verschieben oder "abschließen"
 
-bool fvgShowEnter = false
-bool fvgShowNear = false
-string fvgShowEnterText = na
-string fvgShowNearText = na
+AlarmDefinition fvgEnterAlarm = na
+AlarmDefinition fvgNearAlarm = na
+
 bool fvgShowInvalidated = false
 // 
 // float alarmMin = 0
@@ -56,15 +52,11 @@ if fvg_records.size() > 0
             fvg.state := state
 
             if action == "entered"
-                fvgShowEnter := true
-                fvgShowEnterText := "FVG Entered " + fvgGetEnteredText(fvg)
-                showAlarm(fvgShowEnterText, fvg.def.isBull ? "bottom" : "top", fvgAlarmLabels)
+                fvgEnterAlarm := fvgCreateAlarm(fvg.def, "FVG Entered", fvgGetEnteredText(fvg))
                 fvgSetEnterText(fvg)
 
             if action == "near"
-                fvgShowNear := true
-                fvgShowNearText := "FVG Near " + fvgGetNearText(fvg)
-                showAlarm(fvgShowNearText, fvg.def.isBull ? "bottom" : "top", fvgAlarmLabels)
+                fvgNearAlarm :=  fvgCreateAlarm(fvg.def, "FVG Near", fvgGetNearText(fvg))
                 fvgSetEnterText(fvg)
 
             if action == "invalidate"
@@ -92,10 +84,13 @@ if fvg_records.size() > 0
 //alertcondition(fvgShowNear, 'FVG-near', '{{ticker}} FairValueGap NEAR')
 //alertcondition(fvgShowInvalidated, 'FVG-invalid', '{{ticker}} FairValueGap invalidated')
 
-if fvgShowEnter
-    alert(syminfo.ticker + fvgShowEnterText, alert.freq_once_per_bar)
-else if fvgShowNear
-    alert(syminfo.ticker + fvgShowNearText, alert.freq_once_per_bar)
-else if fvgDetected
-    alert(syminfo.ticker + fvgDetectedText, alert.freq_once_per_bar)
+if not na(fvgEnterAlarm)
+    showAlarm(fvgEnterAlarm, fvgAlarmLabels)
+    alert(fvgEnterAlarm.alarmText, alert.freq_once_per_bar)
+else if not na(fvgNearAlarm)
+    showAlarm(fvgNearAlarm, fvgAlarmLabels)
+    alert(fvgNearAlarm.alarmText, alert.freq_once_per_bar)
+else if not na(fvgDetectedAlarm)
+    showAlarm(fvgDetectedAlarm, fvgAlarmLabels)
+    alert(fvgDetectedAlarm.alarmText, alert.freq_once_per_bar)
     

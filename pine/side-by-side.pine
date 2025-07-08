@@ -48,9 +48,11 @@ plotshape(
   )
 
 if spsBull
-    showAlarm("Side By Side Bullish", "bottom")
-    alert(syminfo.ticker + " Side By Side Bullish", alert.freq_once_per_bar)
+    AlarmDefinition alarm = createAlarm("Side By Side Bullish", "bottom")
+    showAlarm(alarm)
+    alert(alarm.alarmText, alert.freq_once_per_bar)
 if spsBear
-    showAlarm("Side By Side Bearish", "top")
-    alert(syminfo.ticker + " Side By Side Bearish", alert.freq_once_per_bar)
+    AlarmDefinition alarm = createAlarm("Side By Side Bearish", "top")
+    showAlarm(alarm)
+    alert(alarm.alarmText, alert.freq_once_per_bar)
 
