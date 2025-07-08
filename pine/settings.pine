@@ -1,6 +1,7 @@
 
 currentHourTime = timestamp("UTC", year, month, dayofmonth, hour, 0)
 isNewHour = timeframe.change("60")
+isNew15Min = timeframe.change("15")
 isNew4Hour = timeframe.change("240")
 hourBars = (60 / timeframe.multiplier)
 

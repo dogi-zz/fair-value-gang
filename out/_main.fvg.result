@@ -87,6 +87,7 @@ liquiGrapDebug = input.bool(false, 'LiquiGrap Debug', group="ZigZag Config")
 
 currentHourTime = timestamp("UTC", year, month, dayofmonth, hour, 0)
 isNewHour = timeframe.change("60")
+isNew15Min = timeframe.change("15")
 isNew4Hour = timeframe.change("240")
 hourBars = (60 / timeframe.multiplier)
 
@@ -918,6 +919,18 @@ liquiGrapHishLowCheck(HighLowDetectionState state, HighLowDetectionInvalidation 
         invalid.invalidatedLow := true
     invalid
 
+liquiGrapPerform(HighLowDetectionState state, HighLowDetectionInvalidation invalid) =>
+    AlarmDefinition highAlarm = na
+    AlarmDefinition lowAlarm = na
+    if not invalid.invalidatedHigh 
+        if high > state.lastHigh and close < state.lastHigh
+            highAlarm := createAlarm("Liquidity Grap Bearish", "top")
+
+    if not invalid.invalidatedLow
+        if low < state.lastLow and close > state.lastLow
+            lowAlarm := createAlarm("Liquidity Grap Bullish", "bottom")
+
+    [invalid, highAlarm, lowAlarm]
 
 var HighLowDetectionState liquiGrapHighLow = HighLowDetectionState.new()
 var HighLowDetectionInvalidation liquiGrapHighLowInvalid = HighLowDetectionInvalidation.new()
@@ -929,25 +942,35 @@ if isNewHour
     if liquiGrapHighLow.newLow
         liquiGrapHighLowInvalid.invalidatedLow := false
 
-
 if liquiGrapDebug and liquiGrapHighLow.newHigh
     label.new(bar_index, liquiGrapHighLow.lastHigh, 'H', size=size.small, color=color.red, textcolor=color.white, style=label.style_label_down)
 if liquiGrapDebug and liquiGrapHighLow.newLow
     label.new(bar_index, liquiGrapHighLow.lastLow, 'L', size=size.small, color=color.red, textcolor=color.white, style=label.style_label_up)
 
-if not liquiGrapHighLowInvalid.invalidatedHigh 
-    if high > liquiGrapHighLow.lastHigh and close < liquiGrapHighLow.lastHigh
-        AlarmDefinition alarm = createAlarm("Liquidity Grap Bearish", "top")
-        showAlarm(alarm)
-        alert(alarm.alarmText, alert.freq_once_per_bar)
+if isNew15Min
+    [invalid, highAlarm, lowAlarm] = liquiGrapPerform(liquiGrapHighLow, liquiGrapHighLowInvalid)
+    if not na(highAlarm)
+        showAlarm(highAlarm)
+        alert(highAlarm.alarmText, alert.freq_once_per_bar)
+    if not na(lowAlarm)
+        showAlarm(lowAlarm)
+        alert(lowAlarm.alarmText, alert.freq_once_per_bar)
 
-if not liquiGrapHighLowInvalid.invalidatedLow
-    if low < liquiGrapHighLow.lastLow and close > liquiGrapHighLow.lastLow
-        AlarmDefinition alarm = createAlarm("Liquidity Grap Bullish", "bottom")
-        showAlarm(alarm)
-        alert(alarm.alarmText, alert.freq_once_per_bar)
 
-liquiGrapHighLowInvalid := liquiGrapHishLowCheck(liquiGrapHighLow, liquiGrapHighLowInvalid)
+    liquiGrapHighLowInvalid := liquiGrapHishLowCheck(liquiGrapHighLow, invalid)
+
+// if not liquiGrapHighLowInvalid.invalidatedHigh 
+//     if high > liquiGrapHighLow.lastHigh // and close < liquiGrapHighLow.lastHigh
+//         AlarmDefinition alarm = createAlarm("Liquidity Grap Bearish", "top")
+//         showAlarm(alarm)
+//         alert(alarm.alarmText, alert.freq_once_per_bar)
+
+// if not liquiGrapHighLowInvalid.invalidatedLow
+//     if low < liquiGrapHighLow.lastLow // and close > liquiGrapHighLow.lastLow
+//         AlarmDefinition alarm = createAlarm("Liquidity Grap Bullish", "bottom")
+//         showAlarm(alarm)
+//         alert(alarm.alarmText, alert.freq_once_per_bar)
+
  
 plot(not liquiGrapDebug ? na : liquiGrapHighLow.lastHigh, title="Swing High (aktiv)", color=color.yellow, style=plot.style_line, linewidth=2)
 plot(not liquiGrapDebug ? na : liquiGrapHighLow.lastLow, title="Swing Low (aktiv)", color=color.gray, style=plot.style_line, linewidth=2)
