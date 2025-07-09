@@ -6,11 +6,10 @@ type LsobDefinition
     bool  isBull
     float min
     float max
-    int   startTime  // auto
     int   startIndex = na // manual
 
 createLsobDefinition (string prefix, bool isBull, float min, float max) => 
-    LsobDefinition.new(prefix, isBull, min, max, time[2], na)
+    LsobDefinition.new(prefix, isBull, min, max, na)
     
 type LsobDraw
     box   drawBox
@@ -77,7 +76,8 @@ mitigateLsobDraw (LsobDraw draw) =>
 lsobGetTochedText(Lsob lsob) =>
     lsobGetName(lsob.def) + " Touched"
 
-lsobGetLeaved(Lsob lsob) =>
+
+lsobGetLeaved(Lsob lsob, float l, float h) =>
     lsob.def.isBull ? (low > lsob.def.max) : (high < lsob.def.min)
     
 lsobGetImpaled(Lsob lsob) =>
@@ -98,7 +98,7 @@ lsobDetect(prefix) =>
         new_lsob := createLsobDefinition(prefix, false, low, high)
     new_lsob
 
-lsobCheckInBar(Lsob lsob) =>
+lsobCheckInBar(Lsob lsob, float l, float h) =>
     LsobState state = lsob.state
     string action = ""
     if not state.toDelete
@@ -112,7 +112,7 @@ lsobCheckInBar(Lsob lsob) =>
             state.toDelete := true
         else if state.phase != 'closed'
             if state.phase != 'leaved'
-                if lsobGetLeaved(lsob)
+                if lsobGetLeaved(lsob, l, h)
                     state.phase := 'leaved'
                     action := "activated"
             else if state.phase != 'closed'

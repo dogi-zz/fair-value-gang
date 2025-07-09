@@ -13,10 +13,10 @@ if losbShow
     isBear = high[3] == highest
     if isBull
         if isBull(2) and isBull(1) and open > high[3]
-            new_lsob := createLsobDefinition('#', true, low[3], high[3])
+            new_lsob := createLsobDefinition('#', "1m", true, low[3], high[3])
     if isBear
         if isBear(2) and isBear(1) and open < low[3]
-            new_lsob := createLsobDefinition('#', false, low[3], high[3])
+            new_lsob := createLsobDefinition('#', "1m", false, low[3], high[3])
 
     if not na(new_lsob)
         new_lsob.startIndex := bar_index - 3

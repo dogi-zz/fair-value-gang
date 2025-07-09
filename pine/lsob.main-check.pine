@@ -7,12 +7,29 @@ if lsob_records.size() > 0
     for i = lsob_records.size()-1 to 0
         lsob = lsob_records.get(i)
 
-        [state, action] = lsobCheckInBar(lsob)
+        l = low
+        h = high
+        if lsob.def.prefix == "1h"
+            l := lsob1h_l
+            h := lsob1h_h
+        if lsob.def.prefix == "4h"
+            l := lsob4h_l
+            h := lsob4h_h
+
+        // leaved = request.security(syminfo.tickerid, lsob.def.timeframe, lsobGetLeaved(lsob.def.isBull, lsob.def.min, lsob.def.max))
+        [state, action] = lsobCheckInBar(lsob, l, h)
+
 
         if action == "activated"
             activateLsobDraw(lsob.def, lsob.draw)
+            if lsobDebug
+                infoLabelY  = lsob.def.isBull ? lsob.def.min : lsob.def.max
+                infoLabelText =  lsobGetName(lsob.def) + " Activated"
+                infoLabelStyle = lsob.def.isBull ? label.style_label_upper_left :  label.style_label_lower_left
+                label.new(bar_index, infoLabelY, "activated", size=size.small, color=color.white, textcolor=color.black, style=infoLabelStyle)
         else if action == "touch"
             lsobTouchedAlarm := createAlarm( lsobGetTochedText(lsob), lsob.def.isBull ? "bottom" : "top")
+
 
         if action == "touch" or state.phase != 'closed'
             mitigateLsobDraw(lsob.draw)

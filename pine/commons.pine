@@ -51,7 +51,9 @@ getMaxRatio (float min, float max, float max_value) =>
 
 getMaxRatioText (float min, float max, float max_value) =>
   "1:" + str.tostring(getMaxRatio(min, max, max_value))
-  
+
+getLowHigh() => 
+    [low, high]
 
 type AlarmDefinition
     string alarmText

@@ -168,7 +168,9 @@ getMaxRatio (float min, float max, float max_value) =>
 
 getMaxRatioText (float min, float max, float max_value) =>
   "1:" + str.tostring(getMaxRatio(min, max, max_value))
-  
+
+getLowHigh() => 
+    [low, high]
 
 type AlarmDefinition
     string alarmText
@@ -526,11 +528,10 @@ type LsobDefinition
     bool  isBull
     float min
     float max
-    int   startTime  // auto
     int   startIndex = na // manual
 
 createLsobDefinition (string prefix, bool isBull, float min, float max) => 
-    LsobDefinition.new(prefix, isBull, min, max, time[2], na)
+    LsobDefinition.new(prefix, isBull, min, max, na)
     
 type LsobDraw
     box   drawBox
@@ -597,7 +598,8 @@ mitigateLsobDraw (LsobDraw draw) =>
 lsobGetTochedText(Lsob lsob) =>
     lsobGetName(lsob.def) + " Touched"
 
-lsobGetLeaved(Lsob lsob) =>
+
+lsobGetLeaved(Lsob lsob, float l, float h) =>
     lsob.def.isBull ? (low > lsob.def.max) : (high < lsob.def.min)
     
 lsobGetImpaled(Lsob lsob) =>
@@ -618,7 +620,7 @@ lsobDetect(prefix) =>
         new_lsob := createLsobDefinition(prefix, false, low, high)
     new_lsob
 
-lsobCheckInBar(Lsob lsob) =>
+lsobCheckInBar(Lsob lsob, float l, float h) =>
     LsobState state = lsob.state
     string action = ""
     if not state.toDelete
@@ -632,7 +634,7 @@ lsobCheckInBar(Lsob lsob) =>
             state.toDelete := true
         else if state.phase != 'closed'
             if state.phase != 'leaved'
-                if lsobGetLeaved(lsob)
+                if lsobGetLeaved(lsob, l, h)
                     state.phase := 'leaved'
                     action := "activated"
             else if state.phase != 'closed'
@@ -647,29 +649,24 @@ lsobCheckInBar(Lsob lsob) =>
 var lsob_records = array.new<Lsob>(0)
 
 
-var lsob_1h_lastStartTime = 0
+[lsob1h_l, lsob1h_h] = request.security(syminfo.tickerid, "60", getLowHigh())
+[lsob4h_l, lsob4h_h] = request.security(syminfo.tickerid, "240", getLowHigh())
+
 if losbShow and isNewHour
     new_lsob = request.security(syminfo.tickerid, "60", lsobDetect("1h"))
 
     if not na(new_lsob)
-        if new_lsob.startTime != lsob_1h_lastStartTime
-            new_lsob.startIndex := bar_index
-            lsob_1h_lastStartTime := new_lsob.startTime
-
-            lsob = Lsob.new(new_lsob, createLsobDraw(new_lsob), createLsobState())
-            lsob_records.unshift(lsob)
+        new_lsob.startIndex := bar_index
+        lsob = Lsob.new(new_lsob, createLsobDraw(new_lsob), createLsobState())
+        lsob_records.unshift(lsob)
  
-var lsob_4h_lastStartTime = 0
 if losbShow and isNew4Hour
     new_lsob = request.security(syminfo.tickerid, "240", lsobDetect("4h"))
 
     if not na(new_lsob)
-        if new_lsob.startTime != lsob_4h_lastStartTime 
-            new_lsob.startIndex := bar_index
-            lsob_4h_lastStartTime := new_lsob.startTime
-
-            lsob = Lsob.new(new_lsob, createLsobDraw(new_lsob), createLsobState())
-            lsob_records.unshift(lsob)
+        new_lsob.startIndex := bar_index
+        lsob = Lsob.new(new_lsob, createLsobDraw(new_lsob), createLsobState())
+        lsob_records.unshift(lsob)
  
         // DEBUG
         // debugText = (new_lsob.isBull?'u ':'d ') + str.tostring(new_lsob.min)+"-"+str.tostring(new_lsob.max) + " " + str.tostring(new_lsob.startIndex)
@@ -688,12 +685,29 @@ if lsob_records.size() > 0
     for i = lsob_records.size()-1 to 0
         lsob = lsob_records.get(i)
 
-        [state, action] = lsobCheckInBar(lsob)
+        l = low
+        h = high
+        if lsob.def.prefix == "1h"
+            l := lsob1h_l
+            h := lsob1h_h
+        if lsob.def.prefix == "4h"
+            l := lsob4h_l
+            h := lsob4h_h
+
+        // leaved = request.security(syminfo.tickerid, lsob.def.timeframe, lsobGetLeaved(lsob.def.isBull, lsob.def.min, lsob.def.max))
+        [state, action] = lsobCheckInBar(lsob, l, h)
+
 
         if action == "activated"
             activateLsobDraw(lsob.def, lsob.draw)
+            if lsobDebug
+                infoLabelY  = lsob.def.isBull ? lsob.def.min : lsob.def.max
+                infoLabelText =  lsobGetName(lsob.def) + " Activated"
+                infoLabelStyle = lsob.def.isBull ? label.style_label_upper_left :  label.style_label_lower_left
+                label.new(bar_index, infoLabelY, "activated", size=size.small, color=color.white, textcolor=color.black, style=infoLabelStyle)
         else if action == "touch"
             lsobTouchedAlarm := createAlarm( lsobGetTochedText(lsob), lsob.def.isBull ? "bottom" : "top")
+
 
         if action == "touch" or state.phase != 'closed'
             mitigateLsobDraw(lsob.draw)
@@ -923,11 +937,11 @@ liquiGrapPerform(HighLowDetectionState state, HighLowDetectionInvalidation inval
     AlarmDefinition highAlarm = na
     AlarmDefinition lowAlarm = na
     if not invalid.invalidatedHigh 
-        if high > state.lastHigh and close < state.lastHigh
+        if high[1] > state.lastHigh and close[1] < state.lastHigh
             highAlarm := createAlarm("Liquidity Grap Bearish", "top")
 
     if not invalid.invalidatedLow
-        if low < state.lastLow and close > state.lastLow
+        if low[1] < state.lastLow and close[1] > state.lastLow
             lowAlarm := createAlarm("Liquidity Grap Bullish", "bottom")
 
     [invalid, highAlarm, lowAlarm]

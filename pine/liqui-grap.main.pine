@@ -47,11 +47,11 @@ liquiGrapPerform(HighLowDetectionState state, HighLowDetectionInvalidation inval
     AlarmDefinition highAlarm = na
     AlarmDefinition lowAlarm = na
     if not invalid.invalidatedHigh 
-        if high > state.lastHigh and close < state.lastHigh
+        if high[1] > state.lastHigh and close[1] < state.lastHigh
             highAlarm := createAlarm("Liquidity Grap Bearish", "top")
 
     if not invalid.invalidatedLow
-        if low < state.lastLow and close > state.lastLow
+        if low[1] < state.lastLow and close[1] > state.lastLow
             lowAlarm := createAlarm("Liquidity Grap Bullish", "bottom")
 
     [invalid, highAlarm, lowAlarm]
