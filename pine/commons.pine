@@ -8,6 +8,7 @@ debugLabel(float offset, string debugText) =>
 
 bar_index_to_time(int index) =>
   index_offset = bar_index - index,
+  str.tonumber(timeframe.period) < 60 ? str.tostring(index) :
   index_offset > 160 ? str.tostring(index) :
   index_offset > 130 ? ( str.tostring(year[index_offset]) + "-" + str.tostring(month[index_offset]) + "-" + str.tostring(dayofmonth[index_offset]) ) :
   ( str.tostring(year[index_offset]) + "-" + str.tostring(month[index_offset]) + "-" + str.tostring(dayofmonth[index_offset]) + " " + str.tostring(hour[index_offset]) + ":" + str.tostring(minute[index_offset]) )
