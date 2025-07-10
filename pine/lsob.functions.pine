@@ -34,7 +34,7 @@ lsobGetName(LsobDefinition def) =>
     name = def.isBull ? "LSOB (bull)" : "LSOB (bear)"
     result = def.prefix + " " + name
     if lsobDebug
-        result := result + " (" + bar_index_to_time(def.startIndex)+")"
+        result := result + " (" + str.tostring(def.startIndex) +")"
     result
 
 

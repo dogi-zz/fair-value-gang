@@ -123,13 +123,6 @@ debugLabel(float offset, string debugText) =>
     label.new(bar_index, offset, debugText, size=size.small, color=color.silver, textcolor=color.white, style=label.style_label_upper_left)
     offset - 0.01
 
-bar_index_to_time(int index) =>
-  index_offset = bar_index - index,
-  str.tonumber(timeframe.period) < 60 ? str.tostring(index) :
-  index_offset > 160 ? str.tostring(index) :
-  index_offset > 130 ? ( str.tostring(year[index_offset]) + "-" + str.tostring(month[index_offset]) + "-" + str.tostring(dayofmonth[index_offset]) ) :
-  ( str.tostring(year[index_offset]) + "-" + str.tostring(month[index_offset]) + "-" + str.tostring(dayofmonth[index_offset]) + " " + str.tostring(hour[index_offset]) + ":" + str.tostring(minute[index_offset]) )
-
 
 isBull(int offset = 0) =>
   close[offset] > open[offset]
@@ -563,7 +556,7 @@ lsobGetName(LsobDefinition def) =>
     name = def.isBull ? "LSOB (bull)" : "LSOB (bear)"
     result = def.prefix + " " + name
     if lsobDebug
-        result := result + " (" + bar_index_to_time(def.startIndex)+")"
+        result := result + " (" + str.tostring(def.startIndex) +")"
     result
 
 
