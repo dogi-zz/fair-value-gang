@@ -34,7 +34,7 @@ lsobGetName(LsobDefinition def) =>
     name = def.isBull ? "LSOB (bull)" : "LSOB (bear)"
     result = def.prefix + " " + name
     if lsobDebug
-        result := result + " (" + str.tostring(def.startIndex)+")"
+        result := result + " (" + bar_index_to_time(def.startIndex)+")"
     result
 
 
@@ -78,24 +78,26 @@ lsobGetTochedText(Lsob lsob) =>
 
 
 lsobGetLeaved(Lsob lsob, float l, float h) =>
-    lsob.def.isBull ? (low > lsob.def.max) : (high < lsob.def.min)
+    lsob.def.isBull ? (l > lsob.def.max) : (h < lsob.def.min)
     
-lsobGetImpaled(Lsob lsob) =>
-    lsob.def.isBull ? (low < lsob.def.min) : (high > lsob.def.max)
+lsobGetImpaled(Lsob lsob, float l, float h) =>
+    lsob.def.isBull ? (l < lsob.def.min) : (h > lsob.def.max)
     
-lsobGetTouched(Lsob lsob) =>
-    lsob.def.isBull ? (low < lsob.def.max) : (high > lsob.def.min)
+lsobGetTouched(Lsob lsob, float l, float h) =>
+    lsob.def.isBull ? (l < lsob.def.max) : (h > lsob.def.min)
 
 lsobDetect(prefix) =>
     highest = ta.highest(lsobCheckDistance)
     lowest = ta.lowest(lsobCheckDistance)
-    isBull = low == lowest
-    isBear = high == highest
+    float l = low[1]
+    float h = high[1]
+    isBull = l == lowest
+    isBear = h == highest
     LsobDefinition new_lsob = na
     if isBull
-        new_lsob := createLsobDefinition(prefix, true, low, high)
+        new_lsob := createLsobDefinition(prefix, true, l, h)
     if isBear
-        new_lsob := createLsobDefinition(prefix, false, low, high)
+        new_lsob := createLsobDefinition(prefix, false, l, h)
     new_lsob
 
 lsobCheckInBar(Lsob lsob, float l, float h) =>
@@ -103,7 +105,7 @@ lsobCheckInBar(Lsob lsob, float l, float h) =>
     string action = ""
     if not state.toDelete
         expired = (bar_index - lsob.def.startIndex) > lsobMaxAgeBars
-        impaled = lsobGetImpaled(lsob)
+        impaled = lsobGetImpaled(lsob, l, h)
         if expired
             action := "kill"
             state.toDelete := true
@@ -116,7 +118,7 @@ lsobCheckInBar(Lsob lsob, float l, float h) =>
                     state.phase := 'leaved'
                     action := "activated"
             else if state.phase != 'closed'
-                if lsobGetTouched(lsob)
+                if lsobGetTouched(lsob, l, h)
                     state.phase := 'closed'
                     action := "touch"
     [state, action]

@@ -23,5 +23,5 @@ bearCssLight   = color.new(bearBase, 80)
 bullCssBorderLight   = color.new(bullBase, 90)
 bearCssBorderLight   = color.new(bearBase, 90)
 
-textColor = input.color(color.white, "Text Color", group="Styles")
+textColor = input.color(color.black, "Text Color", group="Styles")
 noneColor = color.new(color.white, 100)

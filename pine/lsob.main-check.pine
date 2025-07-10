@@ -7,8 +7,8 @@ if lsob_records.size() > 0
     for i = lsob_records.size()-1 to 0
         lsob = lsob_records.get(i)
 
-        l = low
-        h = high
+        l = low[1]
+        h = high[1]
         if lsob.def.prefix == "1h"
             l := lsob1h_l
             h := lsob1h_h
@@ -26,7 +26,7 @@ if lsob_records.size() > 0
                 infoLabelY  = lsob.def.isBull ? lsob.def.min : lsob.def.max
                 infoLabelText =  lsobGetName(lsob.def) + " Activated"
                 infoLabelStyle = lsob.def.isBull ? label.style_label_upper_left :  label.style_label_lower_left
-                label.new(bar_index, infoLabelY, "activated", size=size.small, color=color.white, textcolor=color.black, style=infoLabelStyle)
+                label.new(bar_index, infoLabelY, lsobGetName(lsob.def) + " activated", size=size.small, color=color.white, textcolor=color.black, style=infoLabelStyle)
         else if action == "touch"
             lsobTouchedAlarm := createAlarm( lsobGetTochedText(lsob), lsob.def.isBull ? "bottom" : "top")
 

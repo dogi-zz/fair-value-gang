@@ -15,4 +15,4 @@ fvgRrrTarget = input.float(3, "Desired Range", minval=0.0, step=0.1, group="FVG 
 
 fvgAlarmLabels = input.bool(false, "FVG-Alarm-Labels", group="FVG Einstellungen")
 
-fvgDebug = input.bool(false, "LFVGSOB-Debug", group="FVG Einstellungen")
+fvgDebug = input.bool(false, "FVG-Debug", group="FVG Einstellungen")

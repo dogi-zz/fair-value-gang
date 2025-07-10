@@ -31,7 +31,7 @@ fvgRrrTarget = input.float(3, "Desired Range", minval=0.0, step=0.1, group="FVG 
 
 fvgAlarmLabels = input.bool(false, "FVG-Alarm-Labels", group="FVG Einstellungen")
 
-fvgDebug = input.bool(false, "LFVGSOB-Debug", group="FVG Einstellungen")
+fvgDebug = input.bool(false, "FVG-Debug", group="FVG Einstellungen")
 
 // ... lsob.settings.pine
 
@@ -109,7 +109,7 @@ bearCssLight   = color.new(bearBase, 80)
 bullCssBorderLight   = color.new(bullBase, 90)
 bearCssBorderLight   = color.new(bearBase, 90)
 
-textColor = input.color(color.white, "Text Color", group="Styles")
+textColor = input.color(color.black, "Text Color", group="Styles")
 noneColor = color.new(color.white, 100)
 
 
@@ -122,6 +122,12 @@ color trasparent = color.new(color.white, 100)
 debugLabel(float offset, string debugText) =>
     label.new(bar_index, offset, debugText, size=size.small, color=color.silver, textcolor=color.white, style=label.style_label_upper_left)
     offset - 0.01
+
+bar_index_to_time(int index) =>
+  index_offset = bar_index - index,
+  index_offset > 160 ? str.tostring(index) :
+  index_offset > 130 ? ( str.tostring(year[index_offset]) + "-" + str.tostring(month[index_offset]) + "-" + str.tostring(dayofmonth[index_offset]) ) :
+  ( str.tostring(year[index_offset]) + "-" + str.tostring(month[index_offset]) + "-" + str.tostring(dayofmonth[index_offset]) + " " + str.tostring(hour[index_offset]) + ":" + str.tostring(minute[index_offset]) )
 
 
 isBull(int offset = 0) =>
@@ -556,7 +562,7 @@ lsobGetName(LsobDefinition def) =>
     name = def.isBull ? "LSOB (bull)" : "LSOB (bear)"
     result = def.prefix + " " + name
     if lsobDebug
-        result := result + " (" + str.tostring(def.startIndex)+")"
+        result := result + " (" + bar_index_to_time(def.startIndex)+")"
     result
 
 
@@ -600,24 +606,26 @@ lsobGetTochedText(Lsob lsob) =>
 
 
 lsobGetLeaved(Lsob lsob, float l, float h) =>
-    lsob.def.isBull ? (low > lsob.def.max) : (high < lsob.def.min)
+    lsob.def.isBull ? (l > lsob.def.max) : (h < lsob.def.min)
     
-lsobGetImpaled(Lsob lsob) =>
-    lsob.def.isBull ? (low < lsob.def.min) : (high > lsob.def.max)
+lsobGetImpaled(Lsob lsob, float l, float h) =>
+    lsob.def.isBull ? (l < lsob.def.min) : (h > lsob.def.max)
     
-lsobGetTouched(Lsob lsob) =>
-    lsob.def.isBull ? (low < lsob.def.max) : (high > lsob.def.min)
+lsobGetTouched(Lsob lsob, float l, float h) =>
+    lsob.def.isBull ? (l < lsob.def.max) : (h > lsob.def.min)
 
 lsobDetect(prefix) =>
     highest = ta.highest(lsobCheckDistance)
     lowest = ta.lowest(lsobCheckDistance)
-    isBull = low == lowest
-    isBear = high == highest
+    float l = low[1]
+    float h = high[1]
+    isBull = l == lowest
+    isBear = h == highest
     LsobDefinition new_lsob = na
     if isBull
-        new_lsob := createLsobDefinition(prefix, true, low, high)
+        new_lsob := createLsobDefinition(prefix, true, l, h)
     if isBear
-        new_lsob := createLsobDefinition(prefix, false, low, high)
+        new_lsob := createLsobDefinition(prefix, false, l, h)
     new_lsob
 
 lsobCheckInBar(Lsob lsob, float l, float h) =>
@@ -625,7 +633,7 @@ lsobCheckInBar(Lsob lsob, float l, float h) =>
     string action = ""
     if not state.toDelete
         expired = (bar_index - lsob.def.startIndex) > lsobMaxAgeBars
-        impaled = lsobGetImpaled(lsob)
+        impaled = lsobGetImpaled(lsob, l, h)
         if expired
             action := "kill"
             state.toDelete := true
@@ -638,7 +646,7 @@ lsobCheckInBar(Lsob lsob, float l, float h) =>
                     state.phase := 'leaved'
                     action := "activated"
             else if state.phase != 'closed'
-                if lsobGetTouched(lsob)
+                if lsobGetTouched(lsob, l, h)
                     state.phase := 'closed'
                     action := "touch"
     [state, action]
@@ -656,7 +664,7 @@ if losbShow and isNewHour
     new_lsob = request.security(syminfo.tickerid, "60", lsobDetect("1h"))
 
     if not na(new_lsob)
-        new_lsob.startIndex := bar_index
+        new_lsob.startIndex := bar_index - 1
         lsob = Lsob.new(new_lsob, createLsobDraw(new_lsob), createLsobState())
         lsob_records.unshift(lsob)
  
@@ -664,7 +672,7 @@ if losbShow and isNew4Hour
     new_lsob = request.security(syminfo.tickerid, "240", lsobDetect("4h"))
 
     if not na(new_lsob)
-        new_lsob.startIndex := bar_index
+        new_lsob.startIndex := bar_index - 1
         lsob = Lsob.new(new_lsob, createLsobDraw(new_lsob), createLsobState())
         lsob_records.unshift(lsob)
  
@@ -685,8 +693,8 @@ if lsob_records.size() > 0
     for i = lsob_records.size()-1 to 0
         lsob = lsob_records.get(i)
 
-        l = low
-        h = high
+        l = low[1]
+        h = high[1]
         if lsob.def.prefix == "1h"
             l := lsob1h_l
             h := lsob1h_h
@@ -704,7 +712,7 @@ if lsob_records.size() > 0
                 infoLabelY  = lsob.def.isBull ? lsob.def.min : lsob.def.max
                 infoLabelText =  lsobGetName(lsob.def) + " Activated"
                 infoLabelStyle = lsob.def.isBull ? label.style_label_upper_left :  label.style_label_lower_left
-                label.new(bar_index, infoLabelY, "activated", size=size.small, color=color.white, textcolor=color.black, style=infoLabelStyle)
+                label.new(bar_index, infoLabelY, lsobGetName(lsob.def) + " activated", size=size.small, color=color.white, textcolor=color.black, style=infoLabelStyle)
         else if action == "touch"
             lsobTouchedAlarm := createAlarm( lsobGetTochedText(lsob), lsob.def.isBull ? "bottom" : "top")
 
