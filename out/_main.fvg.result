@@ -41,7 +41,7 @@ lsobCheckDistance = input.int(20, "LSOB-Check distance", group="LSOB Einstellung
 lsobMaxAge = input.int(168, "LSOB-Maximum Age in Hours", group="LSOB Einstellungen")
 lsobTouchThreshold = input.float(0.1, "LSOB-Touch Threshold", minval=0.0, maxval=1, step=0.01, group="LSOB Einstellungen")
 
-lsobDebug = input.bool(false, "LSOB-Debug", group="LSOB Einstellungen")
+lsobDebug = input.bool(true, "LSOB-Debug", group="LSOB Einstellungen")
 
 
 // ... side-by-side.settings.pine
@@ -525,13 +525,15 @@ lsobMaxAgeBars = lsobMaxAge * hourBars
 
 type LsobDefinition 
     string prefix
+    string description
     bool  isBull
     float min
     float max
     int   startIndex = na // manual
 
 createLsobDefinition (string prefix, bool isBull, float min, float max) => 
-    LsobDefinition.new(prefix, isBull, min, max, na)
+    description = str.tostring(dayofmonth)+'.'+str.tostring(month)+'-'+str.tostring(hour)+':'+str.tostring(minute)
+    LsobDefinition.new(prefix, description, isBull, min, max, na)
     
 type LsobDraw
     box   drawBox
@@ -556,7 +558,7 @@ lsobGetName(LsobDefinition def) =>
     name = def.isBull ? "LSOB (bull)" : "LSOB (bear)"
     result = def.prefix + " " + name
     if lsobDebug
-        result := result + " (" + str.tostring(def.startIndex) +")"
+        result := result + " (" + def.description +")"
     result
 
 
@@ -597,6 +599,9 @@ mitigateLsobDraw (LsobDraw draw) =>
 
 lsobGetTochedText(Lsob lsob) =>
     lsobGetName(lsob.def) + " Touched"
+
+lsobGetActivatedText(Lsob lsob) =>
+    lsobGetName(lsob.def) + " activated"
 
 
 lsobGetLeaved(Lsob lsob, float l, float h) =>
@@ -680,6 +685,7 @@ if losbShow and isNew4Hour
 // ... lsob.main-check.pine
 
 AlarmDefinition lsobTouchedAlarm = na
+AlarmDefinition lsobActivatedAlarm = na
 
 
 // LSOBS Überprüfen
@@ -703,10 +709,11 @@ if lsob_records.size() > 0
         if action == "activated"
             activateLsobDraw(lsob.def, lsob.draw)
             if lsobDebug
-                infoLabelY  = lsob.def.isBull ? lsob.def.min : lsob.def.max
-                infoLabelText =  lsobGetName(lsob.def) + " Activated"
-                infoLabelStyle = lsob.def.isBull ? label.style_label_upper_left :  label.style_label_lower_left
-                label.new(bar_index, infoLabelY, lsobGetName(lsob.def) + " activated", size=size.small, color=color.white, textcolor=color.black, style=infoLabelStyle)
+                //infoLabelY  = lsob.def.isBull ? lsob.def.min : lsob.def.max
+                //infoLabelText =  lsobGetName(lsob.def) + " Activated"
+                //infoLabelStyle = lsob.def.isBull ? label.style_label_upper_left :  label.style_label_lower_left
+                //label.new(bar_index, infoLabelY, lsobGetName(lsob.def) + " activated", size=size.small, color=color.white, textcolor=color.black, style=infoLabelStyle)
+                lsobTouchedAlarm := createAlarm( lsobGetActivatedText(lsob), lsob.def.isBull ? "bottom" : "top")
         else if action == "touch"
             lsobTouchedAlarm := createAlarm( lsobGetTochedText(lsob), lsob.def.isBull ? "bottom" : "top")
 
@@ -1100,5 +1107,4 @@ if not timeframe.isdwm
 
 plot(vwapWeekValue, title = "VWAP-Week", color = color.silver, style = plot.style_circles, linewidth = 1)
 plot(vwapMonthValue, title = "VWAP-Month", color = color.silver, style = plot.style_circles, linewidth = 2)
-
 
